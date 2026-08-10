@@ -1,0 +1,57 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
+fastapi==0.121.3
+uvicorn[standard]==0.30.6
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+alembic==1.13.3
+pydantic==2.9.2
+pydantic-settings==2.6.1
+email-validator==2.2.0  # required by pydantic.EmailStr (used in schemas/auth.py)
+python-multipart==0.0.12
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# ML
+scikit-learn==1.9.0
+joblib==1.4.2
+pandas==2.2.3
+numpy==1.26.4
+shap==0.46.0
+
+# Embedding / vector store
+# torch pinned explicitly to the CPU-only wheel (via --extra-index-url above) so
+# sentence-transformers does not pull in multi-GB NVIDIA CUDA packages — this
+# backend container has no GPU.
+# Bumped from 2.5.1 -> 2.6.0 because mineru[pipeline] requires torch>=2.6.0,<3
+# (see MinerU/pyproject.toml [project.optional-dependencies].pipeline); 2.6.0 is
+# the lowest version satisfying that AND the lowest with a +cpu wheel published
+# (verified against download.pytorch.org/whl/cpu), so no CUDA is pulled in.
+torch==2.6.0+cpu
+sentence-transformers==3.3.1
+chromadb==0.5.20
+
+# RAG / LLM
+langchain==0.3.13
+langchain-core==0.3.28
+langchain-community==0.3.13
+langgraph==0.2.60
+groq==0.13.0
+
+# Parsing / misc
+# Bumped from 4.12.3 -> 4.13.5 because mineru[pipeline] requires
+# beautifulsoup4>=4.13.5,<5 (mineru's own PyPI dependency metadata). Only
+# consumer in this codebase is chunking_docs.py's BeautifulSoup(text,
+# "html.parser") call, a stable/basic API unaffected by this bump.
+beautifulsoup4==4.13.5
+lxml==5.3.0
+httpx==0.27.2
+
+# PDF parsing (MinerU, pipeline backend — CPU/OCR based, no GPU/vLLM stack).
+# Vendored fully into the image (see Dockerfile) so /knowledgebase/upload/pdf
+# does not depend on an external MinerU service. Deliberately mineru[pipeline],
+# NOT mineru[all]/mineru[vlm]/mineru[vllm] — those pull in vLLM + the full CUDA
+# stack, which is multi-GB and useless without a GPU.
+mineru[pipeline]==3.4.4

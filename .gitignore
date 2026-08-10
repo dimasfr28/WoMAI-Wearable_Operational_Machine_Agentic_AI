@@ -1,0 +1,38 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Python / backend
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ML / model artifacts (large binaries — track intentionally if needed)
+backend/saved/*.pkl
+
+# Data (large or host-mounted, not meant to be committed)
+backend/seed_data/pdf_markdown/
+*.csv
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
+
+# Docker
+*.pid
