@@ -1,17 +1,47 @@
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package.json ./
-RUN npm install
-COPY . .
-# Vite inlines env vars into the static bundle at build time (not runtime), so
-# the API URL must be passed as a build arg here rather than a plain compose
-# `environment:` entry on the frontend service.
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-RUN npm run build
+# syntax=docker/dockerfile:1
 
-FROM nginx:1.27-alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# ============================================================
+# Frontend (Next.js) - multi-stage Dockerfile (Bun)
+#   - target "dev"    : dev server dengan hot-reload (compose.dev.yaml)
+#   - target "runner" : production image minimal (compose.prod.yaml)
+# ============================================================
+
+FROM oven/bun:1-alpine AS base
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# ---------- dependencies ----------
+FROM base AS deps
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+# ---------- development ----------
+FROM deps AS dev
+COPY . .
+EXPOSE 3000
+CMD ["bun", "run", "dev"]
+
+# ---------- build ----------
+FROM deps AS builder
+COPY . .
+RUN bun run build
+
+# ---------- production ----------
+# Runner tetap Node: entrypoint standalone Next.js dijalankan `node server.js`
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]
