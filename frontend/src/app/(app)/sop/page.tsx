@@ -36,6 +36,9 @@ export default function SopPage() {
             Knowledge base tindakan yang dipakai chatbot untuk merekomendasikan
             penanganan.
           </p>
+          <p className="text-xs text-muted-foreground">
+            Mode demo: perubahan SOP di halaman ini belum tersimpan permanen.
+          </p>
         </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
           Tambah SOP

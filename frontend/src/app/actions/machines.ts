@@ -1,33 +1,41 @@
 "use server";
 
-import { and, asc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { rowToMachine } from "@/lib/db/mappers";
-import { machines } from "@/lib/db/schema";
-import { requireUser } from "@/lib/supabase/server";
+import { randomUUID } from "node:crypto";
+import { requireSession } from "@/lib/auth/session";
 import type { Machine } from "@/lib/types";
 
+// Data contoh in-memory untuk fondasi migrasi frontend WO.M.AI — TIDAK
+// persisten (reset saat server Next.js restart). Diganti pemanggilan REST
+// API comfest-18 (mis. GET/POST/PATCH/DELETE /machines) di sub-project
+// berikutnya (lihat docs/superpowers/specs/2026-08-11-womai-frontend-foundation-design.md).
+let machinesStore: Machine[] = [
+  {
+    id: "m-demo-1",
+    name: "CNC Mill 01",
+    type: "M",
+    line: "Line A",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "m-demo-2",
+    name: "CNC Lathe 02",
+    type: "H",
+    line: "Line B",
+    notes: "Overhaul terakhir bulan lalu",
+    createdAt: new Date().toISOString(),
+  },
+];
+
 export async function loadMachinesAction(): Promise<Machine[]> {
-  const user = await requireUser();
-  const rows = await db
-    .select()
-    .from(machines)
-    .where(eq(machines.userId, user.id))
-    .orderBy(asc(machines.createdAt));
-  return rows.map(rowToMachine);
+  await requireSession();
+  return machinesStore;
 }
 
 export async function getMachineAction(id: string): Promise<Machine | null> {
-  const user = await requireUser();
-  const rows = await db
-    .select()
-    .from(machines)
-    .where(and(eq(machines.id, id), eq(machines.userId, user.id)))
-    .limit(1);
-  return rows[0] ? rowToMachine(rows[0]) : null;
+  await requireSession();
+  return machinesStore.find((m) => m.id === id) ?? null;
 }
 
-/** Upsert mesin milik user. `id` opsional (baru -> di-generate DB). */
 export async function saveMachineAction(input: {
   id?: string;
   name: string;
@@ -35,38 +43,38 @@ export async function saveMachineAction(input: {
   line?: string;
   notes?: string;
 }): Promise<Machine> {
-  const user = await requireUser();
-  const values = {
-    name: input.name,
-    type: input.type,
-    line: input.line ?? null,
-    notes: input.notes ?? null,
-    userId: user.id,
-  };
+  await requireSession();
 
   if (input.id) {
-    // Update hanya bila baris milik user (scope ganda: where + RLS).
-    const updated = await db
-      .update(machines)
-      .set(values)
-      .where(and(eq(machines.id, input.id), eq(machines.userId, user.id)))
-      .returning();
-    if (updated[0]) return rowToMachine(updated[0]);
-    // Tidak ada baris (mis. id dari device lama) -> insert dengan id tsb.
-    const inserted = await db
-      .insert(machines)
-      .values({ ...values, id: input.id })
-      .returning();
-    return rowToMachine(inserted[0]);
+    const idx = machinesStore.findIndex((m) => m.id === input.id);
+    if (idx >= 0) {
+      const updated: Machine = {
+        ...machinesStore[idx],
+        ...input,
+        id: input.id,
+      };
+      machinesStore = [
+        ...machinesStore.slice(0, idx),
+        updated,
+        ...machinesStore.slice(idx + 1),
+      ];
+      return updated;
+    }
   }
 
-  const inserted = await db.insert(machines).values(values).returning();
-  return rowToMachine(inserted[0]);
+  const machine: Machine = {
+    id: input.id ?? randomUUID(),
+    name: input.name,
+    type: input.type,
+    line: input.line,
+    notes: input.notes,
+    createdAt: new Date().toISOString(),
+  };
+  machinesStore = [...machinesStore, machine];
+  return machine;
 }
 
 export async function deleteMachineAction(id: string): Promise<void> {
-  const user = await requireUser();
-  await db
-    .delete(machines)
-    .where(and(eq(machines.id, id), eq(machines.userId, user.id)));
+  await requireSession();
+  machinesStore = machinesStore.filter((m) => m.id !== id);
 }

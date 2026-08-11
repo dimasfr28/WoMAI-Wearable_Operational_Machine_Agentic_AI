@@ -42,6 +42,10 @@ export default function MesinPage() {
           Tambah Mesin
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Mode demo: perubahan data mesin di halaman ini belum tersimpan
+        permanen.
+      </p>
 
       {machines.length === 0 ? (
         <div className="flex flex-col items-center gap-4 py-16">
