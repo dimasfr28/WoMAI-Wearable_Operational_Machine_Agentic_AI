@@ -1,9 +1,7 @@
 "use client";
 
-import { Suspense, useActionState } from "react";
+import { useActionState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,18 +9,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { loginAction, type AuthActionState } from "@/app/actions/auth";
+import { registerAction, type AuthActionState } from "@/app/actions/auth";
 
 const initialState: AuthActionState = {};
 
-function LoginForm() {
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/chat";
-  const justRegistered = searchParams.get("registered") === "1";
+export default function RegisterPage() {
   const [state, formAction, pending] = useActionState(
-    loginAction,
+    registerAction,
     initialState,
   );
 
@@ -30,16 +26,14 @@ function LoginForm() {
     <div className="flex min-h-svh items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="font-heading">Masuk ke WO.M.AI</CardTitle>
+          <CardTitle className="font-heading">Buat akun WO.M.AI</CardTitle>
           <CardDescription>
-            {justRegistered
-              ? "Akun dibuat, silakan masuk."
-              : "Masuk untuk mengakses mesin & riwayat percakapan."}
+            Daftar untuk mulai memakai WO.M.AI. Registrasi publik hanya
+            terbuka sebelum akun pertama dibuat.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form action={formAction} className="flex flex-col gap-4">
-            <input type="hidden" name="next" value={next} />
             <div className="flex flex-col gap-2">
               <Label htmlFor="username">Username</Label>
               <Input
@@ -47,9 +41,23 @@ function LoginForm() {
                 name="username"
                 type="text"
                 autoComplete="username"
-                placeholder="nama.pengguna"
                 required
               />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="nama@pabrik.co.id"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="full_name">Nama lengkap (opsional)</Label>
+              <Input id="full_name" name="full_name" type="text" autoComplete="name" />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Kata sandi</Label>
@@ -57,34 +65,27 @@ function LoginForm() {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="current-password"
-                placeholder="Kata sandi"
+                autoComplete="new-password"
+                placeholder="Minimal 6 karakter"
                 required
+                minLength={6}
               />
             </div>
             {state.error && (
               <p className="text-sm text-destructive">{state.error}</p>
             )}
             <Button type="submit" disabled={pending}>
-              {pending ? "Memproses…" : "Masuk"}
+              {pending ? "Memproses…" : "Daftar"}
             </Button>
           </form>
           <Link
-            href="/register"
+            href="/login"
             className="mt-4 block w-full text-center text-sm text-muted-foreground hover:text-foreground"
           >
-            Belum punya akun? Daftar
+            Sudah punya akun? Masuk
           </Link>
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <LoginForm />
-    </Suspense>
   );
 }
