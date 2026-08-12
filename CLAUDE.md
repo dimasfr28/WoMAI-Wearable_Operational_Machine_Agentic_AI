@@ -13,14 +13,19 @@ Predictive Maintenance Copilot for Haas CNC machines: ML failure prediction (Ran
 Everything runs via Docker Compose; there is no supported way to run backend/frontend outside containers (backend depends on system libs like `libgl1` for OpenCV/MinerU, and CPU-only torch wheels).
 
 ```bash
-./up.sh          # docker compose up --build, foreground, prints a ready banner once all services are healthy
+./up.sh          # docker compose -f compose.yaml -f dev.compose.yaml up --build, foreground, prints a ready banner once all services are healthy
 ./up.sh -d        # same, detached
-docker compose down
-docker compose logs -f backend   # or: frontend, postgres, chromadb, searxng, firecrawl-api
-docker compose restart backend   # after editing backend code (no hot reload — uvicorn runs without --reload)
+docker compose -f compose.yaml -f dev.compose.yaml down
+docker compose -f compose.yaml -f dev.compose.yaml logs -f backend   # or: frontend, postgres, chromadb, searxng, firecrawl-api
+# Backend and frontend hot-reload from source in dev (uvicorn --reload, bun run dev)
+# — no restart needed after editing backend/app/ or frontend/src/.
+
+# Production (Dokploy/Traefik) — requires the external `dokploy-network` and
+# BACKEND_DOMAIN/FRONTEND_DOMAIN set in .env:
+docker compose -f compose.yaml -f prod.compose.yaml up -d --build
 ```
 
-Requires a root `.env` (gitignored, real secrets — see README's Environment Variables table for the full list: `DATABASE_URL`, `GROQ_API_KEY`, `CHROMA_*`, `SEARXNG_BASE_URL`, `FIRECRAWL_API_*`, `ALIBABA_COOKIES`, `JWT_SECRET`, etc.).
+Requires a root `.env` (gitignored, real secrets — see `.env.example` and README's Environment Variables table for the full list: `DATABASE_URL`, `GROQ_API_KEY`, `CHROMA_*`, `SEARXNG_BASE_URL`, `FIRECRAWL_API_*`, `ALIBABA_COOKIES`, `JWT_SECRET`, etc.). `BACKEND_DOMAIN`/`FRONTEND_DOMAIN` are prod-only (Traefik routing), unused in dev.
 
 Service URLs once up: frontend `http://localhost:3000`, backend `http://localhost:8002` (Swagger at `/docs`), ChromaDB `:8001`, SearXNG `:8080`, Firecrawl API `:3002`. Postgres is exposed on host port `5434` (not 5432 — see comment in `docker-compose.yml`).
 
