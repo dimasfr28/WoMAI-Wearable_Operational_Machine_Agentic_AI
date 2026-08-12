@@ -22,7 +22,7 @@ wait_for_ready() {
   local all_ready
   for _ in $(seq 1 180); do  # ~15 min ceiling (5s * 180)
     local rows
-    rows="$(docker compose ps --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null || true)"
+    rows="$(docker compose -f compose.yaml -f dev.compose.yaml ps --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null || true)"
     if [ -z "$rows" ]; then
       sleep 5
       continue
@@ -55,7 +55,7 @@ wait_for_ready() {
 }
 
 if [[ "${1:-}" == "-d" ]]; then
-  docker compose up --build -d
+  docker compose -f compose.yaml -f dev.compose.yaml up --build -d
   wait_for_ready
   exit 0
 fi
@@ -66,4 +66,4 @@ wait_for_ready &
 READY_PID=$!
 trap 'kill "$READY_PID" 2>/dev/null || true' EXIT
 
-docker compose up --build 2>&1 | grep -vE "$NOISE_PATTERN"
+docker compose -f compose.yaml -f dev.compose.yaml up --build 2>&1 | grep -vE "$NOISE_PATTERN"
