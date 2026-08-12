@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    env_file: .env
+    volumes:
+      - ./backend:/app
+      - ./backend/saved:/app/saved
+      # PDF library lives on the host at /home/dimas/comfest/document (outside
+      # the repo/build context) so uploads and pre-existing manuals share one
+      # place; the "data" subfolder (dataset.csv, already handled by migration
+      # 0003) is intentionally NOT mounted here — PDF_LIBRARY_DIR points at the
+      # library root, and dataset.csv seeding stays a separate concern.
+      - /home/dimas/comfest/document:/data/pdf_library
+    depends_on:
+      postgres:
+        condition: service_healthy
+      firecrawl-api:
+        condition: service_started
+    ports:
+      # Host port changed from 8000 -> 8002: an unrelated container ("led-api",
+      # different project) already holds 8000 on this machine. Container-internal
+      # port stays 8000.
+      - "8002:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      BACKEND_URL: "http://backend:8000"
+    volumes:
+      # Hot-reload: source di-mount, node_modules & .next tetap milik container
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
