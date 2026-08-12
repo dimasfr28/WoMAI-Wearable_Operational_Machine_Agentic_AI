@@ -7,11 +7,14 @@ services:
     volumes:
       - backend_saved:/app/saved
       - pdf_library:/data/pdf_library
+    # Alibaba part-price scraping runs Chromium via Playwright IN-PROCESS
+    # (backend/app/rag/part_price_search.py) — SYS_ADMIN capability needed for
+    # Chromium's sandbox to work inside a container without --no-sandbox.
+    cap_add:
+      - SYS_ADMIN
     depends_on:
       postgres:
         condition: service_healthy
-      firecrawl-api:
-        condition: service_started
     networks:
       - default
       - dokploy-network

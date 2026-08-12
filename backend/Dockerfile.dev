@@ -36,6 +36,16 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright replaces the self-hosted Firecrawl stack (5 containers: api,
+# playwright-service, redis, rabbitmq, nuq-postgres) for part-price scraping —
+# Alibaba's search endpoint is behind Akamai Bot Manager, which fingerprints
+# TLS/JA3 (not just HTTP headers), so plain requests/httpx are blocked outright;
+# a real Chromium via Playwright has an identical fingerprint to a normal
+# browser. `playwright install-deps` pulls the system shared libs Chromium
+# dlopens at runtime (fonts, GTK, audio, etc.) that the slim base image lacks.
+RUN pip install --no-cache-dir playwright==1.62.0 \
+    && playwright install --with-deps chromium
+
 # hf-xet (huggingface_hub's newer "xet-bridge" transfer protocol, now a hard
 # dependency pulled in transitively by sentence-transformers) hangs/stalls
 # indefinitely downloading model.safetensors on this network — HF_HUB_DISABLE_XET=1

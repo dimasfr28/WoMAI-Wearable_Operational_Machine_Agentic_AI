@@ -36,16 +36,6 @@ class Settings(BaseSettings):
     # --- SearXNG ---
     SEARXNG_BASE_URL: str = "http://searxng:8080"
 
-    # --- Firecrawl ---
-    FIRECRAWL_API_URL: str = "http://firecrawl:3002"
-    FIRECRAWL_API_KEY: str = ""
-
-    # --- Alibaba cookie (login session, lihat part_price_search.py) ---
-    # JSON string berisi cookie dari sesi browser yang sudah login ke
-    # alibaba.com — dipakai untuk melewati anti-bot JS challenge yang
-    # memblokir request tanpa autentikasi. Expired secara berkala.
-    ALIBABA_COOKIES: str = ""
-
     # --- Duplicate check thresholds ---
     DUPLICATE_CHUNK_SIMILARITY_THRESHOLD: float = 0.93
     DUPLICATE_CHUNK_RATIO_THRESHOLD: float = 0.85
