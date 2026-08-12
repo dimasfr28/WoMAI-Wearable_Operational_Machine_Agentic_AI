@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper around `docker compose up --build` that:
+# Wrapper around `docker compose -f compose.yaml -f dev.compose.yaml up --build` that:
 #   1. Still shows the full build log (nothing hidden during image builds).
 #   2. Filters out the noisy Firecrawl nuq-postgres pg_cron housekeeping
 #      lines once containers are running (they repeat every few seconds and
@@ -7,7 +7,7 @@
 #   3. Prints a clear "ALL SERVICES READY" banner once every service with a
 #      healthcheck reports healthy (and every service without one is running).
 #
-# Usage: ./up.sh          (equivalent to: docker compose up --build)
+# Usage: ./up.sh          (equivalent to: docker compose -f compose.yaml -f dev.compose.yaml up --build)
 #        ./up.sh -d       (detached — still prints the ready banner, then returns)
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"

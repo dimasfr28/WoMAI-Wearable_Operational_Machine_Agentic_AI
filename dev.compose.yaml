@@ -6,7 +6,6 @@ services:
     env_file: .env
     volumes:
       - ./backend:/app
-      - ./backend/saved:/app/saved
       # PDF library lives on the host at /home/dimas/comfest/document (outside
       # the repo/build context) so uploads and pre-existing manuals share one
       # place; the "data" subfolder (dataset.csv, already handled by migration
