@@ -2,8 +2,8 @@
 
 # ============================================================
 # Frontend (Next.js) - multi-stage Dockerfile (Bun)
-#   - target "dev"    : dev server dengan hot-reload (compose.dev.yaml)
-#   - target "runner" : production image minimal (compose.prod.yaml)
+#   - target "dev"    : dev server dengan hot-reload (docker-compose.yml (see ./up.sh))
+#   - target "runner" : production image minimal (docker-compose.yml (see ./up.sh))
 # ============================================================
 
 FROM oven/bun:1-alpine AS base

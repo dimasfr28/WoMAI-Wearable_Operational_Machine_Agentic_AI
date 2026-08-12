@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { deriveTitle } from "./title";
 
-// Persistensi kini di Postgres (Supabase) via server actions — tidak lagi
-// diuji terhadap localStorage. Hanya helper murni yang diuji di sini.
+// Data disimpan in-memory (dummy), tidak persisten.
+// Hanya helper murni yang diuji di sini.
 describe("deriveTitle", () => {
   it("memotong 40 karakter dengan elipsis", () => {
     const long =

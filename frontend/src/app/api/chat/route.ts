@@ -6,7 +6,7 @@ import { pickScenario } from "@/lib/mock/scenarios";
 import type { WomaiMessage } from "@/lib/types";
 
 // URL backend (server-side). Di Docker: http://backend:8000; lokal: localhost.
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8002";
 
 // Pipeline penuh (prediksi + SHAP + SOP + sintesis LLM) bisa >30 detik;
 // beri margin agar tidak abort di tengah stream.
