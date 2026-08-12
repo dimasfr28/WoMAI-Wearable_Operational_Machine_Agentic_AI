@@ -12,11 +12,14 @@ services:
       # 0003) is intentionally NOT mounted here — PDF_LIBRARY_DIR points at the
       # library root, and dataset.csv seeding stays a separate concern.
       - /home/dimas/comfest/document:/data/pdf_library
+    # Alibaba part-price scraping runs Chromium via Playwright IN-PROCESS
+    # (backend/app/rag/part_price_search.py) — SYS_ADMIN capability needed for
+    # Chromium's sandbox to work inside a container without --no-sandbox.
+    cap_add:
+      - SYS_ADMIN
     depends_on:
       postgres:
         condition: service_healthy
-      firecrawl-api:
-        condition: service_started
     ports:
       # Host port changed from 8000 -> 8002: an unrelated container ("led-api",
       # different project) already holds 8000 on this machine. Container-internal

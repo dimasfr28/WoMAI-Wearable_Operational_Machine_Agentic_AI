@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Predictive Maintenance Copilot for Haas CNC machines: ML failure prediction (RandomForest) + SHAP explainability + KNN case-based recommendations + Corrective RAG (LangGraph + Groq) for automated root-cause analysis, plus marketplace spare-part price lookup. See `README.md` (in Indonesian) for the full architecture, API reference, DB schema, and project status — read it before making non-trivial changes, it is kept up to date and is more detailed than this file.
 
-`firecrawl/` is a vendored, unmodified copy of the third-party [firecrawl](https://github.com/mendableai/firecrawl) project (self-hosted because no official Docker Hub image exists). Treat it as external code — don't edit it as part of feature work in this repo, and don't apply this CLAUDE.md's conventions to it (it has its own `firecrawl/CLAUDE.md`).
-
 ## Commands
 
 Everything runs via Docker Compose; there is no supported way to run backend/frontend outside containers (backend depends on system libs like `libgl1` for OpenCV/MinerU, and CPU-only torch wheels).
@@ -16,7 +14,7 @@ Everything runs via Docker Compose; there is no supported way to run backend/fro
 ./up.sh          # docker compose -f compose.yaml -f dev.compose.yaml up --build, foreground, prints a ready banner once all services are healthy
 ./up.sh -d        # same, detached
 docker compose -f compose.yaml -f dev.compose.yaml down
-docker compose -f compose.yaml -f dev.compose.yaml logs -f backend   # or: frontend, postgres, chromadb, searxng, firecrawl-api
+docker compose -f compose.yaml -f dev.compose.yaml logs -f backend   # or: frontend, postgres, chromadb, searxng
 # Backend and frontend hot-reload from source in dev (uvicorn --reload, bun run dev)
 # — no restart needed after editing backend/app/ or frontend/src/.
 
@@ -25,9 +23,9 @@ docker compose -f compose.yaml -f dev.compose.yaml logs -f backend   # or: front
 docker compose -f compose.yaml -f prod.compose.yaml up -d --build
 ```
 
-Requires a root `.env` (gitignored, real secrets — see `.env.example` and README's Environment Variables table for the full list: `DATABASE_URL`, `GROQ_API_KEY`, `CHROMA_*`, `SEARXNG_BASE_URL`, `FIRECRAWL_API_*`, `ALIBABA_COOKIES`, `JWT_SECRET`, etc.). `BACKEND_DOMAIN`/`FRONTEND_DOMAIN` are prod-only (Traefik routing), unused in dev.
+Requires a root `.env` (gitignored, real secrets — see `.env.example` and README's Environment Variables table for the full list: `DATABASE_URL`, `GROQ_API_KEY`, `CHROMA_*`, `SEARXNG_BASE_URL`, `ALIBABA_COOKIES`, `JWT_SECRET`, etc.). `BACKEND_DOMAIN`/`FRONTEND_DOMAIN` are prod-only (Traefik routing), unused in dev.
 
-Service URLs once up: frontend `http://localhost:3000`, backend `http://localhost:8002` (Swagger at `/docs`), ChromaDB `:8001`, SearXNG `:8080`, Firecrawl API `:3002`. Postgres is exposed on host port `5434` (not 5432 — see comment in `compose.yaml`).
+Service URLs once up: frontend `http://localhost:3000`, backend `http://localhost:8002` (Swagger at `/docs`), ChromaDB `:8001`, SearXNG `:8080`. Postgres is exposed on host port `5434` (not 5432 — see comment in `compose.yaml`).
 
 **Alembic migrations** run automatically on backend container start (`alembic upgrade head` in the Dockerfile CMD). To create a new one, exec into the running container:
 
@@ -51,7 +49,7 @@ docker compose exec backend alembic upgrade head
 3. Explain the prediction with SHAP (`app/ml/shap_tool.py`).
 4. Find similar historical cases and a "worst-case delta" safe-parameter suggestion via KNN (`app/ml/knn_tool.py`).
 5. **Only if predicted_label is a failure**: run Corrective RAG (`app/rag/crag_graph.py`, LangGraph) — build a query from the SHAP interpretation, retrieve from ChromaDB (`app/rag/retriever.py`), grade relevance with the Groq LLM (`app/rag/grader.py`), fall back to SearXNG web search if irrelevant, then have the LLM produce a 3-section Indonesian answer (Apa Masalahnya / SOP Penanganan / Part Bermasalah).
-6. If CRAG names a part, look up marketplace prices/links (Shopee/Tokopedia/Lazada/Alibaba) via Firecrawl + SearXNG (`app/rag/part_price_search.py`).
+6. If CRAG names a part, look up marketplace prices/links (Shopee/Tokopedia/Lazada/Alibaba) via SearXNG-derived keywords + an in-process Playwright/Chromium scrape of Alibaba directly (`app/rag/part_price_search.py`) — the self-hosted Firecrawl stack was removed in favor of this, since Alibaba's search endpoint fingerprints TLS/JA3 and blocks plain HTTP clients.
 7. The LLM composes a final Indonesian-language markdown report from everything above.
 
 All results are persisted. `GET /report/latest` (`routes_report.py`) never recomputes — it only reads stored results, so it's cheap and idempotent for the frontend to poll repeatedly.

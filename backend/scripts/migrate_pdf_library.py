@@ -14,12 +14,16 @@ Run manually: `docker compose exec backend python scripts/migrate_pdf_library.py
 Safe to re-run: skips any file whose name already has a Document row (matches
 upload_pdf's replace-detection: keyed on original_filename).
 
-NOTE (multi-machine support, migration 0008): this script predates per-machine
-scoping and was already run once against the single implicit machine that now
-exists as the backfilled "Haas Milling Machine 2023" row — it does not set
-Document.machine_id or use pdf_library's now-per-machine save/path functions.
-Left as-is since its one-time job is done; do not re-run against a
-multi-machine dataset without updating it to accept a machine_id first.
+NOTE (multi-machine support): now sets Document.machine_id — defaults to the
+only Machine row if there's exactly one, or set MIGRATE_MACHINE_ID env var to
+target a specific machine when there's more than one.
+
+NOTE (chunking revision): re-run after chunking_docs.py's build_chunks was
+changed to produce one chunk per heading_1 (was heading_1+heading_2) with
+image markdown stripped — existing Document/DocumentChunk rows for PDFs must
+be deleted first (cascade removes DocumentChunk; separately delete_chunks the
+corresponding ids from Chroma) so this re-parses from the original PDF files
+rather than skipping them as "already in knowledgebase".
 """
 from __future__ import annotations
 
@@ -38,7 +42,7 @@ from app.ingestion.pdf_parser import PdfParsingFailed, parse_pdf_to_markdown  # 
 from app.vectorstore.chroma_client import get_docs_collection, upsert_chunks  # noqa: E402
 
 
-def _migrate_one(db, pdf_path: Path, existing_filenames: set[str]) -> None:
+def _migrate_one(db, pdf_path: Path, existing_filenames: set[str], machine_id) -> None:
     filename = pdf_path.name
     if filename in existing_filenames:
         print(f"  [skip] {filename}: already in knowledgebase")
@@ -53,6 +57,7 @@ def _migrate_one(db, pdf_path: Path, existing_filenames: set[str]) -> None:
         file_path=pdf_library.safe_filename(filename),
         doc_name=doc_name,
         status="processing",
+        machine_id=machine_id,
     )
     db.add(document)
     db.commit()
@@ -118,6 +123,7 @@ def _migrate_one(db, pdf_path: Path, existing_filenames: set[str]) -> None:
                 {
                     "postgres_chunk_id": str(c.id),
                     "document_id": str(document.id),
+                    "machine_id": str(document.machine_id) if document.machine_id else "",
                     "doc": document.doc_name,
                     "machine_type": document.machine_type or "Haas",
                     "heading_1": c.heading_1 or "",
@@ -142,6 +148,8 @@ def _migrate_one(db, pdf_path: Path, existing_filenames: set[str]) -> None:
 
 
 def main():
+    import os
+
     library_root = pdf_library.library_dir()
     pdf_paths = sorted(
         p for p in library_root.rglob("*.pdf")
@@ -151,13 +159,32 @@ def main():
 
     db = SessionLocal()
     try:
+        from app.db.models import Machine
+
+        # MIGRATE_MACHINE_ID env var lets this be targeted at a specific machine
+        # when there's more than one; defaults to the only machine that exists
+        # if there's exactly one (matches this script's historical single-machine
+        # assumption, now made explicit instead of silently leaving machine_id null).
+        machine_id_str = os.environ.get("MIGRATE_MACHINE_ID")
+        if machine_id_str:
+            machine_id = machine_id_str
+        else:
+            machines = db.query(Machine).all()
+            if len(machines) == 1:
+                machine_id = machines[0].id
+                print(f"  Using the only machine found: {machines[0].name} ({machine_id})")
+            else:
+                raise SystemExit(
+                    f"Found {len(machines)} machines — set MIGRATE_MACHINE_ID env var to target one explicitly."
+                )
+
         existing_filenames = {
             d.original_filename for d in db.query(Document).filter(Document.source_type == "pdf").all()
             if d.original_filename
         }
         for pdf_path in pdf_paths:
             try:
-                _migrate_one(db, pdf_path, existing_filenames)
+                _migrate_one(db, pdf_path, existing_filenames, machine_id)
             except Exception as exc:  # noqa: BLE001 - one bad PDF must not abort the whole batch
                 db.rollback()
                 print(f"  [fail] {pdf_path.name}: unexpected error: {exc}")
