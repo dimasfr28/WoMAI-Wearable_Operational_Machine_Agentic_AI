@@ -1,25 +1,14 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================
-# Frontend (Next.js) - multi-stage Dockerfile (Bun)
-#   - target "dev"    : dev server dengan hot-reload (docker-compose.yml (see ./up.sh))
-#   - target "runner" : production image minimal (docker-compose.yml (see ./up.sh))
+# Frontend (Next.js) - production image (Bun build, Node runtime)
 # ============================================================
 
-FROM oven/bun:1-alpine AS base
+FROM oven/bun:1-alpine AS deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-
-# ---------- dependencies ----------
-FROM base AS deps
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
-
-# ---------- development ----------
-FROM deps AS dev
-COPY . .
-EXPOSE 3000
-CMD ["bun", "run", "dev"]
 
 # ---------- build ----------
 FROM deps AS builder
