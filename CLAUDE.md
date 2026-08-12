@@ -27,7 +27,7 @@ docker compose -f compose.yaml -f prod.compose.yaml up -d --build
 
 Requires a root `.env` (gitignored, real secrets — see `.env.example` and README's Environment Variables table for the full list: `DATABASE_URL`, `GROQ_API_KEY`, `CHROMA_*`, `SEARXNG_BASE_URL`, `FIRECRAWL_API_*`, `ALIBABA_COOKIES`, `JWT_SECRET`, etc.). `BACKEND_DOMAIN`/`FRONTEND_DOMAIN` are prod-only (Traefik routing), unused in dev.
 
-Service URLs once up: frontend `http://localhost:3000`, backend `http://localhost:8002` (Swagger at `/docs`), ChromaDB `:8001`, SearXNG `:8080`, Firecrawl API `:3002`. Postgres is exposed on host port `5434` (not 5432 — see comment in `docker-compose.yml`).
+Service URLs once up: frontend `http://localhost:3000`, backend `http://localhost:8002` (Swagger at `/docs`), ChromaDB `:8001`, SearXNG `:8080`, Firecrawl API `:3002`. Postgres is exposed on host port `5434` (not 5432 — see comment in `compose.yaml`).
 
 **Alembic migrations** run automatically on backend container start (`alembic upgrade head` in the Dockerfile CMD). To create a new one, exec into the running container:
 

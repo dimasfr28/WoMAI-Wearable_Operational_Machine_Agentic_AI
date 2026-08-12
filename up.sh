@@ -13,7 +13,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 # Lines to drop once we're past the build phase (pg_cron job spam from
-# firecrawl-nuq-postgres — see docker-compose.yml comment on its healthcheck).
+# firecrawl-nuq-postgres — see compose.yaml comment on its healthcheck).
 NOISE_PATTERN='cron job [0-9]+ (starting|completed|COMMAND completed)'
 
 wait_for_ready() {
