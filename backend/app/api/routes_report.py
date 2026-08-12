@@ -25,7 +25,7 @@ from app.config import settings
 from app.ml.knn_tool import recommend_similar_cases, worst_case_delta
 from app.ml.predictor import RAW_TO_MODEL_COL, PredictionResult, get_model_bundle
 from app.ml.shap_tool import explain_failure_shap
-from app.rag.crag_graph import build_root_cause_query, run_crag
+from app.rag.crag_graph import generate_search_queries, run_crag
 from app.rag.final_report import FinalReportContext, generate_final_report
 from app.rag.part_price_search import search_part_price
 from app.schemas.report import (
@@ -164,9 +164,18 @@ def _run_report_pipeline(
     part_price_out: list[PartPriceOut] = []
 
     if pred_result.label:
-        query_text = build_root_cause_query(shap_result, pred_result.label, feature_row=feature_row)
+        machine_row = db.query(Machine).filter(Machine.id == machine_id).first()
+        machine_name = machine_row.name if machine_row else "CNC machine"
+
+        top_shap_term, search_queries = generate_search_queries(
+            shap_result, machine_name=machine_name, feature_row=feature_row
+        )
+        # query_text: representasi ringkas satu-baris (disimpan di RootCauseAnalysis.
+        # rag_query untuk ditampilkan di UI/dipakai grading) — search_queries (list)
+        # yang benar-benar drive multi-query retrieval di run_crag()/retrieve().
+        query_text = f"{machine_name}: {top_shap_term} — " + "; ".join(search_queries[:2])
         try:
-            crag_state = run_crag(query_text, machine_id=machine_id)
+            crag_state = run_crag(query_text, machine_id=machine_id, search_queries=search_queries)
         except Exception:
             logger.exception("_run_report_pipeline: CRAG invocation failed")
             crag_state = {
