@@ -17,16 +17,21 @@ from __future__ import annotations
 
 import json
 import uuid as uuid_module
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import ChatMessage, ChatSession, Machine, Sop, User
+from app.api.routes_report import _run_report_pipeline
+from app.api.routes_sensor import _bump_failure_count_if_needed, assign_run_id
+from app.db.models import ChatMessage, ChatSession, Machine, SensorReading, Sop, User
 from app.db.session import SessionLocal
 from app.llm.groq_client import chat, chat_json
+from app.ml.predictor import predict_failure
 from app.schemas.chat import ChatIn
+from app.schemas.sensor import SensorReadingIn
 
 router = APIRouter(tags=["chat"])
 
@@ -118,18 +123,134 @@ def _missing_sensor_fields(intent_data: dict) -> list[str]:
     return [f for f in MISSING_FIELD_LABEL if intent_data.get(f) is None]
 
 
+def _risk_level(probability: float) -> str:
+    if probability < 0.3:
+        return "rendah"
+    if probability < 0.6:
+        return "sedang"
+    return "tinggi"
+
+
+def _prediction_to_event_data(prediction) -> dict:
+    return {
+        "label": prediction.predicted_label,
+        "probability": prediction.failure_probability,
+        "healthScore": prediction.health_score,
+        "riskLevel": _risk_level(prediction.failure_probability),
+    }
+
+
+def _shap_to_event_data(shap) -> dict:
+    return {
+        "contributions": [
+            {"feature": f.feature_name, "value": f.shap_value} for f in shap.features
+        ],
+    }
+
+
+def _sop_to_event_data(sop: Sop) -> dict:
+    return {
+        "title": sop.title,
+        "steps": [
+            {
+                "id": step["id"],
+                "text": step["text"],
+                "priority": step["priority"],
+                "estimatedMinutes": step["estimated_minutes"],
+            }
+            for step in sop.steps
+        ],
+    }
+
+
+def match_sop(query: str, sops: list[Sop]) -> Sop | None:
+    """Dipakai oleh cabang predict/latest_report (query dari CRAG) maupun
+    sop_lookup (query dari pesan user) -- satu mekanisme pencocokan SOP untuk
+    semua tempat, bukan dua cara berbeda."""
+    if not sops or not query:
+        return None
+    sop_list = "\n".join(f"- {s.id}: {s.title} (gejala: {s.symptoms})" for s in sops)
+    system = (
+        "Kamu memilih SOP paling relevan dari daftar berikut untuk menjawab "
+        "pertanyaan/gejala user. Balas HANYA JSON: "
+        '{"sop_id": "<id dari daftar>"} atau {"sop_id": null} kalau tidak ada '
+        f"yang cukup relevan.\n\nDaftar SOP:\n{sop_list}"
+    )
+    raw = chat_json(
+        [
+            {"role": "system", "content": system},
+            {"role": "user", "content": query},
+        ]
+    )
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    sop_id = data.get("sop_id")
+    if not sop_id:
+        return None
+    return next((s for s in sops if str(s.id) == str(sop_id)), None)
+
+
 def _run_predict(db: Session, user: User, intent_data: dict, sops: list[Sop]):
     missing = _missing_sensor_fields(intent_data)
     if missing:
         labels = ", ".join(MISSING_FIELD_LABEL[f] for f in missing)
         yield {"type": "needs_input", "message": f"Sebutkan juga {labels} supaya saya bisa jalankan prediksi."}
         return
-    if not intent_data.get("machine_id"):
+    machine_id = intent_data.get("machine_id")
+    if not machine_id:
         yield {"type": "needs_input", "message": "Mesin mana yang dimaksud? Sebutkan nama mesinnya."}
         return
-    # TODO(Task 2): jalankan prediksi sungguhan (insert SensorRun/SensorReading,
-    # panggil _run_report_pipeline, emit prediction/shap/sop/text).
-    yield {"type": "text", "delta": "Fitur prediksi sedang dalam pengembangan."}
+
+    yield {"type": "status", "message": "Menjalankan prediksi..."}
+
+    reading_in = SensorReadingIn(
+        timestamp=datetime.now(timezone.utc),
+        air_temperature_k=intent_data["air_temperature_k"],
+        process_temperature_k=intent_data["process_temperature_k"],
+        rotational_speed_rpm=intent_data["rotational_speed_rpm"],
+        tool_wear_min=intent_data["tool_wear_min"],
+    )
+    run = assign_run_id(reading_in, db, machine_id)
+    reading = SensorReading(
+        run_id=run.id,
+        reading_timestamp=reading_in.timestamp,
+        air_temperature_k=reading_in.air_temperature_k,
+        process_temperature_k=reading_in.process_temperature_k,
+        rotational_speed_rpm=reading_in.rotational_speed_rpm,
+        tool_wear_min=reading_in.tool_wear_min,
+        machine_failure=None,
+        input_source="chat",
+        created_by=user.id,
+    )
+    db.add(reading)
+    db.commit()
+    db.refresh(reading)
+
+    feature_row = {
+        "air_temperature_k": float(reading.air_temperature_k),
+        "process_temperature_k": float(reading.process_temperature_k),
+        "rotational_speed_rpm": reading.rotational_speed_rpm,
+        "tool_wear_min": float(reading.tool_wear_min),
+    }
+    pred_result = predict_failure(feature_row)
+    reading.machine_failure = pred_result.label
+    db.commit()
+    db.refresh(reading)
+    _bump_failure_count_if_needed(db, run, pred_result.label)
+
+    report = _run_report_pipeline(db, reading, pred_result, machine_id)
+
+    yield {"type": "prediction", "data": _prediction_to_event_data(report.prediction)}
+    yield {"type": "shap", "data": _shap_to_event_data(report.shap)}
+
+    if report.prediction.predicted_label and report.root_cause is not None:
+        matched = match_sop(report.root_cause.query, sops)
+        if matched is not None:
+            yield {"type": "sop", "data": _sop_to_event_data(matched)}
+
+    yield {"type": "text", "delta": report.final_report_text}
 
 
 def _run_latest_report(db: Session, intent_data: dict, sops: list[Sop]):
