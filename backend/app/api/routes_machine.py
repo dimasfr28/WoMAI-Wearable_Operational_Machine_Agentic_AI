@@ -95,9 +95,9 @@ def update_machine(
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     if machine is None:
         raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
-    if payload.name is not None:
+    if "name" in payload.model_fields_set and payload.name is not None:
         machine.name = payload.name
-    if payload.machine_type is not None:
+    if "machine_type" in payload.model_fields_set:
         machine.machine_type = payload.machine_type
     db.commit()
     db.refresh(machine)

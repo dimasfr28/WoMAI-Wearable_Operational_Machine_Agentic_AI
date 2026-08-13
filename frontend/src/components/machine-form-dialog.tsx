@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,7 @@ export function MachineFormDialog({
       onSaved(saved);
       onOpenChange(false);
     } catch (err) {
+      unstable_rethrow(err);
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan mesin.");
     } finally {
       setSaving(false);

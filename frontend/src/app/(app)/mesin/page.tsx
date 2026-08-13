@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Factory, MessageSquareText, Pencil, Trash2 } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -110,6 +111,7 @@ export default function MesinPage() {
                                   await deleteMachine(m.id);
                                   toast.success("Mesin dihapus.");
                                 } catch (err) {
+                                  unstable_rethrow(err);
                                   toast.error(
                                     err instanceof Error
                                       ? err.message
