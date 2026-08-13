@@ -26,9 +26,7 @@ export async function getMachine(id: string): Promise<Machine | null> {
 export async function saveMachine(machine: {
   id?: string;
   name: string;
-  type: Machine["type"];
-  line?: string;
-  notes?: string;
+  machineType?: string;
 }): Promise<Machine> {
   const saved = await saveMachineAction(machine);
   notify();
