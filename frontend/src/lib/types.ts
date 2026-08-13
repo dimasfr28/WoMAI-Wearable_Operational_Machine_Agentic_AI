@@ -74,6 +74,97 @@ export interface Sop {
   updatedAt: string; // ISO
 }
 
+export interface ReportSensorSnapshot {
+  id: string;
+  readingTimestamp: string; // ISO
+  airTemperatureK: number;
+  processTemperatureK: number;
+  rotationalSpeedRpm: number;
+  toolWearMin: number;
+}
+
+export interface ReportPrediction {
+  id: string;
+  predictedLabel: boolean;
+  failureProbability: number; // 0..1
+  healthScore: number; // 0..100
+  modelVersion: string;
+  threshold: number; // 0..1
+}
+
+export interface ReportShapFeature {
+  featureName: string;
+  value: number;
+  shapValue: number;
+  rank: number;
+}
+
+export interface ReportShap {
+  baseValue: number;
+  features: ReportShapFeature[];
+}
+
+export interface ReportNeighborRow {
+  airTemperatureK: number;
+  processTemperatureK: number;
+  rotationalSpeedRpm: number;
+  toolWearMin: number;
+  machineFailure: boolean;
+}
+
+export interface ReportNeighborGroup {
+  distances: number[];
+  rows: ReportNeighborRow[];
+}
+
+export interface ReportRecommendations {
+  nearestFailure: ReportNeighborGroup;
+  nearestNoFailure: ReportNeighborGroup;
+  worstCaseDelta: {
+    // Kunci di sini adalah NAMA TAMPILAN dari backend (mis. "Rotational speed
+    // rpm"), bukan raw snake_case -- lihat RAW_TO_MODEL_COL di
+    // backend/app/ml/predictor.py. Jangan coba petakan ulang ke camelCase.
+    nearestSafePoint: Record<string, number | boolean> | null;
+    suggestedAdjustments: Record<string, number>;
+  };
+}
+
+export interface ReportRetrievedChunk {
+  chunkId: string;
+  docName?: string;
+  heading1?: string;
+  heading2?: string;
+  content: string;
+}
+
+export interface ReportRootCause {
+  query: string;
+  answer: string;
+  usedWebFallback: boolean;
+  retrievedChunkIds: string[];
+  retrievedChunks: ReportRetrievedChunk[];
+}
+
+export interface ReportPartPrice {
+  partName: string;
+  priceMin: number | null;
+  priceMax: number | null;
+  currency: string;
+  sourceUrl: string | null;
+}
+
+export interface ReportData {
+  sensor: ReportSensorSnapshot;
+  prediction: ReportPrediction;
+  shap: ReportShap;
+  recommendations: ReportRecommendations;
+  rootCause: ReportRootCause | null;
+  partPrices: ReportPartPrice[];
+  finalReportText: string;
+  llmModel: string;
+  createdAt: string; // ISO
+}
+
 export interface ChatSession {
   id: string;
   title: string;
