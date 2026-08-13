@@ -3,7 +3,7 @@ import {
   loadSopsAction,
   saveSopAction,
 } from "@/app/actions/sop";
-import type { Sop, SopMode, SopStep } from "@/lib/types";
+import type { Sop, SopStep } from "@/lib/types";
 
 // Dipertahankan agar komponen bisa memicu re-fetch setelah mutasi.
 export const SOPS_CHANGED_EVENT = "womai:sops-changed";
@@ -20,7 +20,6 @@ export async function loadSops(): Promise<Sop[]> {
 
 export async function saveSop(sop: {
   id?: string;
-  mode: SopMode;
   title: string;
   symptoms: string;
   body: string;
