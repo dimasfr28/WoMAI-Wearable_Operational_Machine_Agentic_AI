@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { SendHorizonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,18 @@ export function ChatInput({
 
   return (
     <div className="border-t bg-background p-4">
+      {machine && (
+        <div className="mx-auto mb-2 flex w-full max-w-3xl justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+            render={<Link href={`/report?machine_id=${machine.id}`} />}
+          >
+            Lihat laporan lengkap →
+          </Button>
+        </div>
+      )}
       <form
         className="mx-auto flex w-full max-w-3xl items-end gap-2"
         onSubmit={(e) => {
