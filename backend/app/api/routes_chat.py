@@ -24,7 +24,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from fastapi import HTTPException
+
 from app.api.routes_report import _run_report_pipeline
+from app.api.routes_report import get_latest_report as _get_latest_report
 from app.api.routes_sensor import _bump_failure_count_if_needed, assign_run_id
 from app.db.models import ChatMessage, ChatSession, Machine, SensorReading, Sop, User
 from app.db.session import SessionLocal
@@ -254,16 +257,39 @@ def _run_predict(db: Session, user: User, intent_data: dict, sops: list[Sop]):
 
 
 def _run_latest_report(db: Session, intent_data: dict, sops: list[Sop]):
-    if not intent_data.get("machine_id"):
+    machine_id = intent_data.get("machine_id")
+    if not machine_id:
         yield {"type": "needs_input", "message": "Mesin mana yang laporannya ingin dilihat?"}
         return
-    # TODO(Task 3): ambil laporan sungguhan (reuse get_latest_report()).
-    yield {"type": "text", "delta": "Fitur laporan terakhir sedang dalam pengembangan."}
+
+    yield {"type": "status", "message": "Mengambil laporan terakhir..."}
+
+    try:
+        report = _get_latest_report(machine_id, db)
+    except HTTPException as exc:
+        yield {"type": "text", "delta": str(exc.detail)}
+        return
+
+    yield {"type": "prediction", "data": _prediction_to_event_data(report.prediction)}
+    yield {"type": "shap", "data": _shap_to_event_data(report.shap)}
+
+    if report.prediction.predicted_label and report.root_cause is not None:
+        matched = match_sop(report.root_cause.query, sops)
+        if matched is not None:
+            yield {"type": "sop", "data": _sop_to_event_data(matched)}
+
+    yield {"type": "text", "delta": report.final_report_text}
 
 
 def _run_sop_lookup(intent_data: dict, sops: list[Sop]):
-    # TODO(Task 3): cari SOP sungguhan (match_sop()).
-    yield {"type": "text", "delta": "Fitur pencarian SOP sedang dalam pengembangan."}
+    query = intent_data.get("sop_query") or ""
+    yield {"type": "status", "message": "Mencari SOP relevan..."}
+    matched = match_sop(query, sops)
+    if matched is None:
+        yield {"type": "text", "delta": "Belum ada SOP yang cocok untuk itu di knowledge base."}
+        return
+    yield {"type": "sop", "data": _sop_to_event_data(matched)}
+    yield {"type": "text", "delta": f"Berikut SOP yang relevan: {matched.title}."}
 
 
 def _run_chitchat(message: str):
