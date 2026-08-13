@@ -33,7 +33,7 @@ function riskLevelFor(probability: number): RiskLevel {
 
 function ReportContent() {
   const searchParams = useSearchParams();
-  const { machines } = useMachines();
+  const { machines, loading: machinesLoading } = useMachines();
   const [machineId, setMachineId] = useState<string | null>(
     searchParams.get("machine_id"),
   );
@@ -117,7 +117,7 @@ function ReportContent() {
         </div>
       </div>
 
-      {!machineId && loaded && (
+      {!machinesLoading && machines.length === 0 && (
         <p className="text-sm text-muted-foreground">
           Belum ada mesin terdaftar.
         </p>
