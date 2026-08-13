@@ -36,3 +36,8 @@ backend/seed_data/pdf_markdown/
 
 # Docker
 *.pid
+
+# Internal planning docs / local tooling scratch — not part of the submission
+docs/
+firecrawl/
+graphify-out/
