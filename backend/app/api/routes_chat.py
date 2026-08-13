@@ -74,15 +74,19 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
-def _resolve_session_uuid(session_id: str) -> uuid_module.UUID:
-    try:
-        return uuid_module.UUID(session_id)
-    except ValueError:
-        return uuid_module.uuid5(uuid_module.NAMESPACE_URL, session_id)
+def _resolve_session_uuid(user: User, session_id: str) -> uuid_module.UUID:
+    """UUID sesi diturunkan dari (user, session_id) bersama-sama -- BUKAN dari
+    session_id saja -- supaya dua user berbeda yang kebetulan mengirim
+    session_id sama (mis. fallback "default" di frontend) tidak akan pernah
+    tabrakan pada UUID yang sama. session_id valid UUID pun tetap digabung
+    dengan identitas user, konsisten dan dapat diprediksi untuk user yang
+    sama di setiap panggilan (kontinuitas terjaga tanpa perlu deteksi
+    tabrakan/mint UUID acak yang tidak persisten)."""
+    return uuid_module.uuid5(uuid_module.NAMESPACE_URL, f"{user.id}:{session_id}")
 
 
 def _get_or_create_session(db: Session, user: User, session_id: str) -> ChatSession:
-    session_uuid = _resolve_session_uuid(session_id)
+    session_uuid = _resolve_session_uuid(user, session_id)
     session = (
         db.query(ChatSession)
         .filter(ChatSession.id == session_uuid, ChatSession.user_id == user.id)
@@ -90,17 +94,7 @@ def _get_or_create_session(db: Session, user: User, session_id: str) -> ChatSess
     )
     if session is not None:
         return session
-    # `id` mungkin sudah dipakai user LAIN (mis. semua yang kena fallback
-    # "default" di frontend resolve ke UUID deterministik yang sama) --
-    # ChatSession.id adalah primary key, jadi tidak bisa dipakai ulang lintas
-    # user. Kalau id sudah dipakai user lain, mint UUID baru supaya sesi user
-    # ini tetap independen; kalau id benar-benar bebas, pakai UUID
-    # deterministik seperti biasa (jaga kontinuitas untuk kasus single-user).
-    id_taken_by_other = (
-        db.query(ChatSession).filter(ChatSession.id == session_uuid).first() is not None
-    )
-    new_id = uuid_module.uuid4() if id_taken_by_other else session_uuid
-    session = ChatSession(id=new_id, user_id=user.id, title="Chat baru")
+    session = ChatSession(id=session_uuid, user_id=user.id, title="Chat baru")
     db.add(session)
     db.commit()
     db.refresh(session)
