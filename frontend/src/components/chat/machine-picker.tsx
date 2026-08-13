@@ -65,7 +65,7 @@ export function MachinePicker({
                 variant="outline"
                 className="ml-1 shrink-0 px-1 py-0 text-[10px] leading-4"
               >
-                {m.type}
+                {m.machineType ?? "Haas"}
               </Badge>
             </SelectItem>
           ))}

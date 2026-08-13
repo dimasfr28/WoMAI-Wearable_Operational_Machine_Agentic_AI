@@ -13,14 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { saveMachine } from "@/lib/machines";
 import type { Machine } from "@/lib/types";
 
@@ -38,18 +30,14 @@ export function MachineFormDialog({
   onSaved,
 }: MachineFormDialogProps) {
   const [name, setName] = useState("");
-  const [type, setType] = useState<Machine["type"]>("M");
-  const [line, setLine] = useState("");
-  const [notes, setNotes] = useState("");
+  const [machineType, setMachineType] = useState("");
 
   // Reset form when dialog opens; prefill from machine prop in edit mode
   useEffect(() => {
     if (!open) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(machine?.name ?? "");
-    setType(machine?.type ?? "M");
-    setLine(machine?.line ?? "");
-    setNotes(machine?.notes ?? "");
+    setMachineType(machine?.machineType ?? "");
   }, [open, machine]);
 
   const [saving, setSaving] = useState(false);
@@ -58,20 +46,17 @@ export function MachineFormDialog({
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
-    const trimmedLine = line.trim();
-    const trimmedNotes = notes.trim();
+    const trimmedType = machineType.trim();
     try {
       const saved = await saveMachine({
         id: machine?.id,
         name: name.trim(),
-        type,
-        line: trimmedLine || undefined,
-        notes: trimmedNotes || undefined,
+        machineType: trimmedType || undefined,
       });
       onSaved(saved);
       onOpenChange(false);
-    } catch {
-      toast.error("Gagal menyimpan mesin.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan mesin.");
     } finally {
       setSaving(false);
     }
@@ -97,47 +82,18 @@ export function MachineFormDialog({
             </Label>
             <Input
               id="mesin-nama"
-              placeholder="mis. Motor Line 3"
+              placeholder="mis. CNC Mill 01"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="mesin-tipe">Tipe mesin</Label>
-            <Select
-              value={type}
-              onValueChange={(v) => {
-                if (v) setType(v as Machine["type"]);
-              }}
-            >
-              <SelectTrigger id="mesin-tipe" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="L">L (Low)</SelectItem>
-                <SelectItem value="M">M (Medium)</SelectItem>
-                <SelectItem value="H">H (High)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="mesin-line">Line (opsional)</Label>
+            <Label htmlFor="mesin-tipe">Tipe mesin (opsional)</Label>
             <Input
-              id="mesin-line"
-              placeholder="mis. Line 3"
-              value={line}
-              onChange={(e) => setLine(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="mesin-catatan">Catatan (opsional)</Label>
-            <Textarea
-              id="mesin-catatan"
-              placeholder="mis. Motor pompa air utama"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              className="resize-none"
+              id="mesin-tipe"
+              placeholder="mis. Haas"
+              value={machineType}
+              onChange={(e) => setMachineType(e.target.value)}
             />
           </div>
         </div>
