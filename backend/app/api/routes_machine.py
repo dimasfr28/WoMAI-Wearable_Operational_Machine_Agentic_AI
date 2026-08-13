@@ -13,7 +13,14 @@ from app.api.deps import get_current_user, require_role
 from app.db.models import Document, Machine, Prediction, Recommendation, SensorReading, SensorRun, User
 from app.db.session import get_db
 from app.ml.predictor import get_model_bundle
-from app.schemas.machine import EarlyWarningOut, EarlyWarningPanelOut, MachineCreateIn, MachineOut, MachineStatusOut
+from app.schemas.machine import (
+    EarlyWarningOut,
+    EarlyWarningPanelOut,
+    MachineCreateIn,
+    MachineOut,
+    MachineStatusOut,
+    MachineUpdateIn,
+)
 
 router = APIRouter(prefix="/machines", tags=["machines"])
 
@@ -76,6 +83,55 @@ def get_machine(machine_id: str, db: Session = Depends(get_db), user: User = Dep
         document_count=doc_count,
         run_count=run_count,
     )
+
+
+@router.patch("/{machine_id}", response_model=MachineOut)
+def update_machine(
+    machine_id: str,
+    payload: MachineUpdateIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("engineer")),
+):
+    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    if machine is None:
+        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+    if payload.name is not None:
+        machine.name = payload.name
+    if payload.machine_type is not None:
+        machine.machine_type = payload.machine_type
+    db.commit()
+    db.refresh(machine)
+    doc_count = db.query(Document).filter(Document.machine_id == machine.id).count()
+    run_count = db.query(SensorRun).filter(SensorRun.machine_id == machine.id).count()
+    return MachineOut(
+        id=str(machine.id),
+        name=machine.name,
+        machine_type=machine.machine_type,
+        status=machine.status,
+        created_at=machine.created_at,
+        document_count=doc_count,
+        run_count=run_count,
+    )
+
+
+@router.delete("/{machine_id}", status_code=204)
+def delete_machine(
+    machine_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("engineer")),
+):
+    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    if machine is None:
+        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+    doc_count = db.query(Document).filter(Document.machine_id == machine.id).count()
+    run_count = db.query(SensorRun).filter(SensorRun.machine_id == machine.id).count()
+    if doc_count > 0 or run_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Mesin masih punya {doc_count} dokumen dan {run_count} sensor run — hapus data terkait dulu.",
+        )
+    db.delete(machine)
+    db.commit()
 
 
 # feature_name (model column, "Air temperature K" dst) -> (parameter key dipakai
