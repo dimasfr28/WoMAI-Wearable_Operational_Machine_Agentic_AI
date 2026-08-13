@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { unstable_rethrow, useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
