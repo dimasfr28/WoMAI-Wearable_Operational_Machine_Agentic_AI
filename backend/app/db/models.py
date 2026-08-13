@@ -307,3 +307,25 @@ class AgentToolLog(Base):
     output_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# SOP library (2026-08-13) — standalone structured procedure library, not
+# tied to a failure-mode taxonomy or a specific machine.
+# ---------------------------------------------------------------------------
+
+
+class Sop(Base):
+    __tablename__ = "sops"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    symptoms: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    body: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    steps: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    reference: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

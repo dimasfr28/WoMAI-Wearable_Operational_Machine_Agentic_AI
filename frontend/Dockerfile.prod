@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+
+# ============================================================
+# Frontend (Next.js) - production image (Bun build, Node runtime)
+# ============================================================
+
+FROM oven/bun:1-alpine AS deps
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+# ---------- build ----------
+FROM deps AS builder
+COPY . .
+RUN bun run build
+
+# ---------- production ----------
+# Runner tetap Node: entrypoint standalone Next.js dijalankan `node server.js`
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]

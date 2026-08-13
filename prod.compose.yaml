@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    env_file: .env
+    volumes:
+      - backend_saved:/app/saved
+      - pdf_library:/data/pdf_library
+    # Alibaba part-price scraping runs Chromium via Playwright IN-PROCESS
+    # (backend/app/rag/part_price_search.py) — SYS_ADMIN capability needed for
+    # Chromium's sandbox to work inside a container without --no-sandbox.
+    cap_add:
+      - SYS_ADMIN
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comfest-backend.rule=Host(`${BACKEND_DOMAIN}`)"
+      - "traefik.http.routers.comfest-backend.entrypoints=websecure"
+      - "traefik.http.routers.comfest-backend.tls.certResolver=letsencrypt"
+      - "traefik.http.services.comfest-backend.loadbalancer.server.port=8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    environment:
+      BACKEND_URL: "http://backend:8000"
+    depends_on:
+      - backend
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comfest-frontend.rule=Host(`${FRONTEND_DOMAIN}`)"
+      - "traefik.http.routers.comfest-frontend.entrypoints=websecure"
+      - "traefik.http.routers.comfest-frontend.tls.certResolver=letsencrypt"
+      - "traefik.http.services.comfest-frontend.loadbalancer.server.port=3000"
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  backend_saved:
+  pdf_library:

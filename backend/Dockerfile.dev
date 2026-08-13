@@ -1,0 +1,79 @@
+FROM python:3.11-slim
+
+# Host has no working IPv6 route AND TCP port 53 (DNS-over-TCP) is blocked on this
+# network. download.pytorch.org's AAAA answer alone exceeds the 512-byte classic UDP
+# DNS limit, so glibc's getaddrinfo() gets a truncated (TC=1) UDP response and retries
+# over TCP — which then hangs forever since TCP:53 never connects. Reprioritizing IPv4
+# (gai.conf) isn't enough because the AAAA query itself still stalls; RES_OPTIONS=no-aaaa
+# (glibc 2.34+) skips AAAA queries entirely, avoiding the truncation/TCP-fallback path.
+ENV RES_OPTIONS="no-aaaa"
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/app/.cache/huggingface \
+    # MinerU (pipeline backend) is vendored fully into this image so PDF parsing
+    # never depends on an external MinerU service. Model downloads MUST go via
+    # ModelScope, not HuggingFace — HF is unusably slow/stalls on this network,
+    # ModelScope is fast and reliable. This has to be set before any `mineru`
+    # invocation (build-time pre-download below AND at container runtime) so both
+    # paths use the same mirror.
+    MINERU_MODEL_SOURCE=modelscope
+
+# libgl1/libglib2.0-0: required at runtime by opencv-python (cv2), a transitive
+# dependency of mineru[pipeline]'s layout/OCR stack — the slim base image lacks
+# the shared libs cv2 dlopens, so import fails without them even though the
+# wheel itself installs fine.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# All pinned dependencies ship manylinux wheels (scikit-learn, shap, chromadb,
+# sentence-transformers/torch, psycopg[binary], mineru[pipeline]'s own deps), so
+# build-essential/gcc is not needed and is skipped to keep the image lean and
+# the build fast.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Playwright replaces the self-hosted Firecrawl stack (5 containers: api,
+# playwright-service, redis, rabbitmq, nuq-postgres) for part-price scraping —
+# Alibaba's search endpoint is behind Akamai Bot Manager, which fingerprints
+# TLS/JA3 (not just HTTP headers), so plain requests/httpx are blocked outright;
+# a real Chromium via Playwright has an identical fingerprint to a normal
+# browser. `playwright install-deps` pulls the system shared libs Chromium
+# dlopens at runtime (fonts, GTK, audio, etc.) that the slim base image lacks.
+RUN pip install --no-cache-dir playwright==1.62.0 \
+    && playwright install --with-deps chromium
+
+# hf-xet (huggingface_hub's newer "xet-bridge" transfer protocol, now a hard
+# dependency pulled in transitively by sentence-transformers) hangs/stalls
+# indefinitely downloading model.safetensors on this network — HF_HUB_DISABLE_XET=1
+# does NOT actually disable it in this version, only *uninstalling* the package
+# does (huggingface_hub then logs a warning and correctly falls back to plain
+# HTTP download, which works fine — same class of CDN issue as
+# download.pytorch.org/ModelScope elsewhere in this Dockerfile, different vendor).
+RUN pip uninstall -y hf-xet
+
+# Vendor MinerU's demo/api_client-driven parsing helper (demo/demo.py upstream at
+# github.com/opendatalab/MinerU) — this is the pattern verified in
+# code/knowledgebase.ipynb to actually work: it spawns a local `mineru-api`
+# FastAPI subprocess (mineru.cli.fast_api) and drives it over HTTP via
+# mineru.cli.api_client, rather than any direct "parse this PDF" python function
+# (no such simple function exists in the mineru package). demo.py itself is a
+# small standalone script, not part of the installed `mineru` PyPI package, so it
+# is copied in explicitly rather than pulled in via pip.
+COPY vendor/mineru_demo.py /app/vendor/mineru_demo.py
+
+# Pre-download MinerU pipeline models at build time (Opsi A) so the container
+# starts ready to parse immediately instead of blocking the first upload
+# request on a multi-hundred-MB model download. Uses the mineru-models-download
+# CLI (installed by mineru[pipeline] above) with --source modelscope explicitly
+# (belt-and-suspenders alongside the MINERU_MODEL_SOURCE env above).
+RUN mineru-models-download --source modelscope --model_type pipeline
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["bash", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
