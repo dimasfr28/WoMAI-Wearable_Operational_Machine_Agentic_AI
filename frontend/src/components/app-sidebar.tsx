@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Factory,
+  FileBarChart,
   FileText,
   History,
   LogOut,
@@ -109,6 +110,16 @@ export function AppSidebar() {
                 >
                   <History />
                   <span>Riwayat</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Laporan"
+                  isActive={pathname === "/report"}
+                  render={<Link href="/report" onClick={closeOnMobile} />}
+                >
+                  <FileBarChart />
+                  <span>Laporan</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
