@@ -67,7 +67,7 @@ Response: text/event-stream (SSE), format `data: {json}\n\n` per event
 |---|---|---|
 | `prediction.label`, `.probability`, `.health_score` | `prediction` | `{label: bool, probability: float, healthScore: float, riskLevel: "rendah"\|"sedang"\|"tinggi"}` — `riskLevel` dihitung baru: `probability < 0.3` → rendah, `< 0.6` → sedang, else tinggi (threshold sederhana, didokumentasikan sebagai heuristik, bukan hasil tuning) |
 | `shap.features` | `shap` | `{contributions: [{feature, value}]}` — mapping `feature_name`→`feature`, `shap_value`→`value` |
-Hasil `match_sop(root_cause_analysis.query, semua_sop)` — hanya kalau `prediction.label` True | `sop` | `{title, steps: [{id, text, priority, estimatedMinutes}]}` — kalau `match_sop` balas `None`, event ini di-skip (bukan dipaksa kosong) |
+| Hasil `match_sop(root_cause_analysis.query, semua_sop)` — hanya kalau `prediction.label` True | `sop` | `{title, steps: [{id, text, priority, estimatedMinutes}]}` — kalau `match_sop` balas `None`, event ini di-skip (bukan dipaksa kosong) |
 | `final_report` (markdown Bahasa Indonesia) | `text` | Teks lengkap, di-chunk untuk efek streaming |
 
 ### Skema request intent-classification (prompt `chat_json`)
