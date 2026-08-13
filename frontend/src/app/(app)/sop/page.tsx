@@ -20,7 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SopFormDialog } from "@/components/sop-form-dialog";
 import { useSops } from "@/hooks/use-sops";
 import { deleteSop } from "@/lib/sops";
-import { SOP_MODE_LABEL, type Sop } from "@/lib/types";
+import type { Sop } from "@/lib/types";
 
 export default function SopPage() {
   const { sops, loading } = useSops();
@@ -35,9 +35,6 @@ export default function SopPage() {
           <p className="text-muted-foreground text-sm">
             Knowledge base tindakan yang dipakai chatbot untuk merekomendasikan
             penanganan.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Mode demo: perubahan SOP di halaman ini belum tersimpan permanen.
           </p>
         </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -58,10 +55,7 @@ export default function SopPage() {
               <CardContent className="flex flex-col gap-3 p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{s.mode}</Badge>
-                      <span className="font-medium">{s.title}</span>
-                    </div>
+                    <span className="font-medium">{s.title}</span>
                     {s.body && (
                       <span className="text-muted-foreground line-clamp-2 text-xs">
                         {s.body}
@@ -88,9 +82,9 @@ export default function SopPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Hapus SOP?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            SOP &quot;{s.title}&quot; ({SOP_MODE_LABEL[s.mode]})
-                            akan dihapus dari knowledge base. Chatbot tidak lagi
-                            memakainya untuk rekomendasi.
+                            SOP &quot;{s.title}&quot; akan dihapus dari
+                            knowledge base. Chatbot tidak lagi memakainya
+                            untuk rekomendasi.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -100,8 +94,12 @@ export default function SopPage() {
                               try {
                                 await deleteSop(s.id);
                                 toast.success("SOP dihapus.");
-                              } catch {
-                                toast.error("Gagal menghapus SOP.");
+                              } catch (err) {
+                                toast.error(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Gagal menghapus SOP.",
+                                );
                               }
                             }}
                           >
