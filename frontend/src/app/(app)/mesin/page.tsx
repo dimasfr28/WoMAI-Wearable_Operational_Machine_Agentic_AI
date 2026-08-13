@@ -42,10 +42,6 @@ export default function MesinPage() {
           Tambah Mesin
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Mode demo: perubahan data mesin di halaman ini belum tersimpan
-        permanen.
-      </p>
 
       {machines.length === 0 ? (
         <div className="flex flex-col items-center gap-4 py-16">
@@ -74,14 +70,14 @@ export default function MesinPage() {
                   <div className="flex items-start gap-3">
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="font-medium">{m.name}</span>
-                      {(m.line ?? m.notes) && (
+                      {m.machineType && (
                         <span className="text-xs text-muted-foreground">
-                          {[m.line, m.notes].filter(Boolean).join(" · ")}
+                          {m.machineType}
                         </span>
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                      <Badge variant="secondary">Tipe {m.type}</Badge>
+                      <Badge variant="secondary">{m.status}</Badge>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -113,8 +109,12 @@ export default function MesinPage() {
                                 try {
                                   await deleteMachine(m.id);
                                   toast.success("Mesin dihapus.");
-                                } catch {
-                                  toast.error("Gagal menghapus mesin.");
+                                } catch (err) {
+                                  toast.error(
+                                    err instanceof Error
+                                      ? err.message
+                                      : "Gagal menghapus mesin.",
+                                  );
                                 }
                               }}
                             >
@@ -127,6 +127,7 @@ export default function MesinPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-muted-foreground">
+                      {m.documentCount} dokumen · {m.runCount} run ·{" "}
                       {sessionCount} sesi
                     </span>
                     {lastPrediction ? (
