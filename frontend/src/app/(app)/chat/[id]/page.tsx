@@ -40,7 +40,9 @@ export default function ChatSessionPage({
         ? ((await getMachine(session.machineId)) ?? {
             id: session.machineId,
             name: session.machineName ?? "Mesin terhapus",
-            type: "M" as const,
+            status: "unknown",
+            documentCount: 0,
+            runCount: 0,
             createdAt: session.createdAt,
           })
         : null;

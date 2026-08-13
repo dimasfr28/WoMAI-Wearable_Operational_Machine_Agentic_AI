@@ -49,7 +49,6 @@ export function ChatInput({
         <ManualInputDialog
           disabled={disabled}
           onSend={onSend}
-          defaultType={machine?.type}
         />
         <Textarea
           value={input}
