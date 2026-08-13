@@ -20,6 +20,11 @@ class MachineCreateIn(BaseModel):
     machine_type: str | None = None
 
 
+class MachineUpdateIn(BaseModel):
+    name: str | None = None
+    machine_type: str | None = None
+
+
 class EarlyWarningOut(BaseModel):
     """One parameter's card within the AI Early Warning panel (rancangan.txt
     Section 9) — derived from the most recent report's SHAP contribution (for
