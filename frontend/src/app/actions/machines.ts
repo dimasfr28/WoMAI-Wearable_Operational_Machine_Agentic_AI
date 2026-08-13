@@ -1,80 +1,79 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-import { requireSession } from "@/lib/auth/session";
+import { backendFetch } from "@/lib/backend-fetch";
 import type { Machine } from "@/lib/types";
 
-// Data contoh in-memory untuk fondasi migrasi frontend WO.M.AI — TIDAK
-// persisten (reset saat server Next.js restart). Diganti pemanggilan REST
-// API comfest-18 (mis. GET/POST/PATCH/DELETE /machines) di sub-project
-// berikutnya (lihat docs/superpowers/specs/2026-08-11-womai-frontend-foundation-design.md).
-let machinesStore: Machine[] = [
-  {
-    id: "m-demo-1",
-    name: "CNC Mill 01",
-    type: "M",
-    line: "Line A",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "m-demo-2",
-    name: "CNC Lathe 02",
-    type: "H",
-    line: "Line B",
-    notes: "Overhaul terakhir bulan lalu",
-    createdAt: new Date().toISOString(),
-  },
-];
+interface MachineApiOut {
+  id: string;
+  name: string;
+  machine_type: string | null;
+  status: string;
+  created_at: string;
+  document_count: number;
+  run_count: number;
+}
+
+function fromApi(m: MachineApiOut): Machine {
+  return {
+    id: m.id,
+    name: m.name,
+    machineType: m.machine_type ?? undefined,
+    status: m.status,
+    documentCount: m.document_count,
+    runCount: m.run_count,
+    createdAt: m.created_at,
+  };
+}
 
 export async function loadMachinesAction(): Promise<Machine[]> {
-  await requireSession();
-  return machinesStore;
+  const resp = await backendFetch("/machines", { cache: "no-store" });
+  if (!resp.ok) {
+    throw new Error(`Gagal memuat daftar mesin (${resp.status})`);
+  }
+  const data = (await resp.json()) as MachineApiOut[];
+  return data.map(fromApi);
 }
 
 export async function getMachineAction(id: string): Promise<Machine | null> {
-  await requireSession();
-  return machinesStore.find((m) => m.id === id) ?? null;
+  const resp = await backendFetch(`/machines/${id}`, { cache: "no-store" });
+  if (resp.status === 404) return null;
+  if (!resp.ok) {
+    throw new Error(`Gagal memuat mesin (${resp.status})`);
+  }
+  const data = (await resp.json()) as MachineApiOut;
+  return fromApi(data);
 }
 
 export async function saveMachineAction(input: {
   id?: string;
   name: string;
-  type: Machine["type"];
-  line?: string;
-  notes?: string;
+  machineType?: string;
 }): Promise<Machine> {
-  await requireSession();
-
-  if (input.id) {
-    const idx = machinesStore.findIndex((m) => m.id === input.id);
-    if (idx >= 0) {
-      const updated: Machine = {
-        ...machinesStore[idx],
-        ...input,
-        id: input.id,
-      };
-      machinesStore = [
-        ...machinesStore.slice(0, idx),
-        updated,
-        ...machinesStore.slice(idx + 1),
-      ];
-      return updated;
-    }
-  }
-
-  const machine: Machine = {
-    id: input.id ?? randomUUID(),
+  const body = JSON.stringify({
     name: input.name,
-    type: input.type,
-    line: input.line,
-    notes: input.notes,
-    createdAt: new Date().toISOString(),
-  };
-  machinesStore = [...machinesStore, machine];
-  return machine;
+    machine_type: input.machineType || null,
+  });
+  const resp = await backendFetch(
+    input.id ? `/machines/${input.id}` : "/machines",
+    {
+      method: input.id ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    },
+  );
+  if (!resp.ok) {
+    throw new Error(`Gagal menyimpan mesin (${resp.status})`);
+  }
+  const data = (await resp.json()) as MachineApiOut;
+  return fromApi(data);
 }
 
 export async function deleteMachineAction(id: string): Promise<void> {
-  await requireSession();
-  machinesStore = machinesStore.filter((m) => m.id !== id);
+  const resp = await backendFetch(`/machines/${id}`, { method: "DELETE" });
+  if (!resp.ok) {
+    const body = (await resp.json().catch(() => null)) as {
+      detail?: string;
+    } | null;
+    throw new Error(body?.detail ?? `Gagal menghapus mesin (${resp.status})`);
+  }
 }
