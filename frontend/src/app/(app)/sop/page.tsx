@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FileText, Pencil, Trash2 } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -95,6 +96,7 @@ export default function SopPage() {
                                 await deleteSop(s.id);
                                 toast.success("SOP dihapus.");
                               } catch (err) {
+                                unstable_rethrow(err);
                                 toast.error(
                                   err instanceof Error
                                     ? err.message

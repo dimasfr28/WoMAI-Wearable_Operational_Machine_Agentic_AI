@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { loadMachines, MACHINES_CHANGED_EVENT } from "@/lib/machines";
 import type { Machine } from "@/lib/types";
@@ -16,7 +17,8 @@ export function useMachines() {
         .then((loaded) => {
           if (active) setMachines(loaded);
         })
-        .catch(() => {
+        .catch((err) => {
+          unstable_rethrow(err);
           if (active) toast.error("Gagal memuat daftar mesin.");
         })
         .finally(() => {

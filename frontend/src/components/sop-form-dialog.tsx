@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,6 +98,7 @@ export function SopFormDialog({
       onOpenChange(false);
       toast.success(sop ? "SOP diperbarui." : "SOP ditambahkan.");
     } catch (err) {
+      unstable_rethrow(err);
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan SOP.");
     } finally {
       setSaving(false);
