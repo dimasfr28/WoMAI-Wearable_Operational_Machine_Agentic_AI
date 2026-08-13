@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { saveSop } from "@/lib/sops";
-import { SOP_MODE_LABEL, type Sop, type SopMode, type SopStep } from "@/lib/types";
+import type { Sop, SopStep } from "@/lib/types";
 
 interface SopFormDialogProps {
   open: boolean;
@@ -31,8 +31,6 @@ interface SopFormDialogProps {
   sop?: Sop;
   onSaved: (s: Sop) => void;
 }
-
-const MODES: SopMode[] = ["TWF", "HDF", "PWF", "OSF", "RNF"];
 
 function emptyStep(): SopStep {
   return {
@@ -52,7 +50,6 @@ export function SopFormDialog({
   sop,
   onSaved,
 }: SopFormDialogProps) {
-  const [mode, setMode] = useState<SopMode>("HDF");
   const [title, setTitle] = useState("");
   const [symptoms, setSymptoms] = useState("");
   const [body, setBody] = useState("");
@@ -63,7 +60,6 @@ export function SopFormDialog({
   useEffect(() => {
     if (!open) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMode(sop?.mode ?? "HDF");
     setTitle(sop?.title ?? "");
     setSymptoms(sop?.symptoms ?? "");
     setBody(sop?.body ?? "");
@@ -91,7 +87,6 @@ export function SopFormDialog({
     try {
       const saved = await saveSop({
         id: sop?.id,
-        mode,
         title: title.trim(),
         symptoms: symptoms.trim(),
         body: body.trim(),
@@ -101,8 +96,8 @@ export function SopFormDialog({
       onSaved(saved);
       onOpenChange(false);
       toast.success(sop ? "SOP diperbarui." : "SOP ditambahkan.");
-    } catch {
-      toast.error("Gagal menyimpan SOP.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan SOP.");
     } finally {
       setSaving(false);
     }
@@ -120,27 +115,6 @@ export function SopFormDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="sop-mode">Failure mode</Label>
-            <Select
-              value={mode}
-              onValueChange={(v) => {
-                if (v) setMode(v as SopMode);
-              }}
-            >
-              <SelectTrigger id="sop-mode" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODES.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m} — {SOP_MODE_LABEL[m]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="flex flex-col gap-2">
             <Label htmlFor="sop-title">
               Judul <span className="text-destructive">*</span>
