@@ -136,9 +136,9 @@ export default function MesinPage() {
                       <Badge
                         className={cn(RISK_BADGE[lastPrediction.riskLevel])}
                       >
-                        {lastPrediction.failureType === "NONE"
-                          ? "Normal"
-                          : `${lastPrediction.failureType} · risiko ${lastPrediction.riskLevel}`}
+                        {lastPrediction.label
+                          ? `Berpotensi gagal · risiko ${lastPrediction.riskLevel}`
+                          : "Normal"}
                       </Badge>
                     ) : (
                       <Badge variant="secondary">Belum ada prediksi</Badge>
