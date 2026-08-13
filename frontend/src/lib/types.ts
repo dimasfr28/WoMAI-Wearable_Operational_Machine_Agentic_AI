@@ -1,12 +1,11 @@
 import type { UIMessage } from "ai";
 
-export type FailureType = "TWF" | "HDF" | "PWF" | "OSF" | "RNF" | "NONE";
 export type RiskLevel = "rendah" | "sedang" | "tinggi";
 
 export interface PredictionResult {
-  failureProbability: number; // 0..1
-  failureType: FailureType;
-  failureTypeLabel: string;
+  label: boolean; // true = model memprediksi kegagalan
+  probability: number; // 0..1, failure_probability dari backend
+  healthScore: number; // 0..100, (1-probability)*100
   riskLevel: RiskLevel;
 }
 

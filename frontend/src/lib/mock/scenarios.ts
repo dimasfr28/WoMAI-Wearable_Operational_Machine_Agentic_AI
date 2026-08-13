@@ -85,9 +85,9 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     responseText:
       "Berdasarkan parameter yang kamu sebutkan, model mendeteksi indikasi Heat Dissipation Failure (HDF) dengan probabilitas 87%. Pendorong utamanya adalah suhu proses yang tinggi dan selisih suhu udara-proses yang menyempit, sehingga pembuangan panas tidak efektif. Saya sudah siapkan rencana tindakan di bawah. Prioritaskan langkah berlabel Segera, dan perhatikan estimasi kerugian bila perbaikan ditunda.",
     prediction: {
-      failureProbability: 0.87,
-      failureType: "HDF",
-      failureTypeLabel: "Heat Dissipation Failure",
+      probability: 0.87,
+      label: true,
+      healthScore: 13,
       riskLevel: "tinggi",
     },
     shap: {
@@ -148,9 +148,9 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     responseText:
       "Parameter menunjukkan indikasi Overstrain Failure (OSF) dengan probabilitas 82%. Kombinasi torsi tinggi dan tool wear yang menumpuk membuat beban melewati ambang aman material. Ikuti rencana tindakan di bawah dan kurangi beban sementara sebelum inspeksi.",
     prediction: {
-      failureProbability: 0.82,
-      failureType: "OSF",
-      failureTypeLabel: "Overstrain Failure",
+      probability: 0.82,
+      label: true,
+      healthScore: 18,
       riskLevel: "tinggi",
     },
     shap: {
@@ -205,9 +205,9 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     responseText:
       "Model mendeteksi indikasi Tool Wear Failure (TWF) dengan probabilitas 74%. Tool wear sudah mendekati batas usia pakai sehingga risiko kegagalan meningkat. Jadwalkan penggantian tool sesuai rencana tindakan di bawah.",
     prediction: {
-      failureProbability: 0.74,
-      failureType: "TWF",
-      failureTypeLabel: "Tool Wear Failure",
+      probability: 0.74,
+      label: true,
+      healthScore: 26,
       riskLevel: "sedang",
     },
     shap: {
@@ -262,9 +262,9 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     responseText:
       "Terdeteksi indikasi Power Failure (PWF) dengan probabilitas 69%. Kombinasi kecepatan putar rendah dengan torsi saat ini membuat daya keluar dari rentang operasi aman (3.500-9.000 W). Periksa suplai daya dan parameter operasi sesuai rencana di bawah.",
     prediction: {
-      failureProbability: 0.69,
-      failureType: "PWF",
-      failureTypeLabel: "Power Failure",
+      probability: 0.69,
+      label: true,
+      healthScore: 31,
       riskLevel: "sedang",
     },
     shap: {
@@ -319,9 +319,9 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     responseText:
       "Kabar baik: berdasarkan parameter tersebut, mesin diprediksi beroperasi normal dengan probabilitas kegagalan hanya 3%. Tidak ada tindakan darurat yang diperlukan; lanjutkan pemantauan rutin dan pastikan parameter tetap dalam rentang operasi normal.",
     prediction: {
-      failureProbability: 0.03,
-      failureType: "NONE",
-      failureTypeLabel: "Tidak Ada Kegagalan",
+      probability: 0.03,
+      label: false,
+      healthScore: 97,
       riskLevel: "rendah",
     },
   },

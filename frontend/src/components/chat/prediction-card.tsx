@@ -11,7 +11,7 @@ const RISK_RING: Record<PredictionResult["riskLevel"], string> = {
 };
 
 export function PredictionCard({ data }: { data: PredictionResult }) {
-  const pct = Math.round(data.failureProbability * 100);
+  const pct = Math.round(data.probability * 100);
 
   return (
     <Card>
@@ -44,8 +44,7 @@ export function PredictionCard({ data }: { data: PredictionResult }) {
         <div className="flex flex-col gap-1">
           <div className="text-3xl font-bold tabular-nums">{pct}%</div>
           <div className="text-sm font-medium">
-            {data.failureTypeLabel}
-            {data.failureType !== "NONE" && ` (${data.failureType})`}
+            {data.label ? "Berpotensi gagal" : "Normal"}
           </div>
           <Badge className={cn("w-fit", RISK_BADGE[data.riskLevel])}>
             Risiko {data.riskLevel}

@@ -176,9 +176,9 @@ function RiwayatContent() {
                     RISK_BADGE[s.lastPrediction.riskLevel],
                   )}
                 >
-                  {s.lastPrediction.failureType === "NONE"
-                    ? "Normal"
-                    : `${s.lastPrediction.failureType} · risiko ${s.lastPrediction.riskLevel}`}
+                  {s.lastPrediction.label
+                    ? `Berpotensi gagal · risiko ${s.lastPrediction.riskLevel}`
+                    : "Normal"}
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="shrink-0">
