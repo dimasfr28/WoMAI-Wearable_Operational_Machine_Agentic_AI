@@ -54,30 +54,21 @@ export type WomaiMessage = UIMessage<unknown, WomaiDataParts>;
 export interface Machine {
   id: string;
   name: string;
-  type: "L" | "M" | "H";
-  line?: string;
-  notes?: string;
+  machineType?: string; // free-text label, e.g. "Haas" — comfest-18 has no L/M/H concept
+  status: string; // e.g. "running" — comfest-18's real Machine.status column
+  documentCount: number;
+  runCount: number;
   createdAt: string; // ISO
 }
 
-// Failure mode yang dicakup knowledge base SOP (selaras AI4I 2020 & backend).
-export type SopMode = "TWF" | "HDF" | "PWF" | "OSF" | "RNF";
-
-export const SOP_MODE_LABEL: Record<SopMode, string> = {
-  TWF: "Tool Wear Failure",
-  HDF: "Heat Dissipation Failure",
-  PWF: "Power Failure",
-  OSF: "Overstrain Failure",
-  RNF: "Random Failure",
-};
-
-// Dokumen SOP terkurasi — knowledge base global yang dipakai pipeline retrieval.
+// SOP library mandiri — TIDAK terikat failure-mode taxonomy apa pun (backend
+// comfest-18 tidak punya konsep itu; prediksinya biner, dijelaskan SHAP
+// per-fitur sensor) dan TIDAK di-scope per mesin (global).
 export interface Sop {
   id: string;
-  mode: SopMode;
   title: string;
-  symptoms: string; // kata kunci gejala (dipakai embedding retrieval)
-  body: string; // deskripsi + tindakan (teks yang di-embed)
+  symptoms: string; // kata kunci gejala (dipakai pencarian)
+  body: string; // deskripsi + tindakan
   steps: SopStep[];
   reference: string;
   createdAt: string; // ISO
