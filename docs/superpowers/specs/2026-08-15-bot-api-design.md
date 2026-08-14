@@ -8,7 +8,7 @@
 
 API baru `POST /bot` di dalam grup `chat` — free-form agentic AI chatbot berbasis LangGraph + Groq. Berbeda dengan `/chat` yang punya format intent terstruktur (predict/latest_report/sop_lookup/chitchat), `/bot` adalah chatbot bebas yang memakai agent loop: LLM memutuskan sendiri tools mana yang perlu dipanggil untuk menjawab pertanyaan user.
 
-Data yang diakses berasal dari sensor readings di PostgreSQL (bukan semantic search ke ChromaDB). Model dan RAG pipeline terpisah dari `/chat`.
+Data sensor diakses via **RAG** (semantic search ke ChromaDB) menggunakan collection terpisah dari milik `/chat`. Model dan RAG pipeline terpisah dari `/chat`.
 
 ### Key Decisions
 
@@ -71,16 +71,17 @@ User message + history
 - Input: pertanyaan user + `machine_id` yang sudah resolved
 - LLM memutuskan tool mana yang perlu dipanggil, bisa >1 tool
 - Hard limit: max 5 tool calls per request
+- **Data diakses via RAG** (semantic search ke ChromaDB), bukan direct SQL query
+- ChromaDB collection khusus `/bot` — terpisah dari collection milik `/chat` (`knowledgebase_docs` / `knowledgebase_sensor_runs`)
 - Tools tersedia:
 
 | Tool | Deskripsi | Data Source |
 |---|---|---|
-| `get_sensor_history(machine_id)` | Time-series data sensor run terbaru + IQR anomaly flags + statistik | `sensor_readings` table |
-| `get_latest_prediction(machine_id)` | Prediksi ML terakhir (label, probabilitas, health score) | `predictions` table |
-| `get_machine_status(machine_id)` | Status operasional mesin + early warning | `machines` table + derived |
-| `list_machines()` | Daftar semua mesin terdaftar | `machines` table |
-| `get_sensor_runs(machine_id)` | Daftar run/sesi kerja suatu mesin | `sensor_runs` table |
-| `get_prediction_history(machine_id, limit)` | Riwayat prediksi sebelumnya | `predictions` table |
+| `search_sensor_data(query, machine_id?)` | Semantic search data sensor — narasi run, nilai parameter, anomali | ChromaDB `bot_sensor_data` collection |
+| `list_machines()` | Daftar semua mesin terdaftar (structured, bukan RAG) | `machines` table |
+| `get_machine_info(machine_id)` | Info dasar mesin + jumlah run + jumlah dokumen | `machines` table |
+
+**Catatan:** `list_machines()` dan `get_machine_info()` tetap query langsung ke PostgreSQL karena sifatnya enumerasi/lookup, bukan pencarian semantik.
 
 **4. Synthesize & Stream**
 - Input: data dari tools + pertanyaan user
@@ -170,7 +171,8 @@ backend/app/
 │   ├── __init__.py
 │   ├── graph.py               # LangGraph StateGraph (router → resolve_machine → sensor_tools → synthesize)
 │   ├── state.py               # TypedDict untuk graph state
-│   ├── tools.py               # Tool functions (get_sensor_history, dll.)
+│   ├── tools.py               # Tool functions (search_sensor_data, list_machines, get_machine_info)
+│   ├── retriever.py           # RAG retriever — query ke ChromaDB collection `bot_sensor_data`
 │   └── prompts.py             # System prompts per node
 ├── db/
 │   ├── models.py              # + BotSession, BotMessage models
@@ -180,8 +182,19 @@ backend/app/
 
 Reuse existing modules:
 - `llm/groq_client.py` — LLM calls
-- `db/models.py` — query sensor tables (SensorReading, Prediction, SensorRun, Machine)
+- `vectorstore/chroma_client.py` — ChromaDB client (tambah helper untuk collection baru `bot_sensor_data`)
+- `ingestion/embedder.py` — embedding model (pakai model yang sama: `paraphrase-multilingual-MiniLM-L12-v2`)
 - `api/deps.py` — JWT auth, `get_current_user`
+
+### ChromaDB Collection
+
+Collection baru: **`bot_sensor_data`** — terpisah dari `knowledgebase_docs` dan `knowledgebase_sensor_runs` milik `/chat`.
+
+**Isi collection:** Narasi sensor run yang sama formatnya dengan `knowledgebase_sensor_runs` (dihasilkan oleh `build_run_chunk()`), tapi disimpan di collection sendiri. Ingestion terjadi di tempat yang sama: saat sensor run ditutup (`_close_run_and_build_chunk()` di `routes_sensor.py`), data juga di-upsert ke `bot_sensor_data`.
+
+**Embedding model:** Sama — `paraphrase-multilingual-MiniLM-L12-v2`, cosine similarity.
+
+**Metadata filter:** `machine_id` untuk scoping per-mesin saat query.
 
 ## Conversation History
 
@@ -208,6 +221,5 @@ Reuse existing modules:
 ## Out of Scope
 
 - Frontend (halaman chat `/bot` di Next.js) — akan didesain terpisah
-- RAG/semantic search ke ChromaDB — `/bot` query structured data dari PostgreSQL saja
-- Integrasi dengan CRAG pipeline (`rag/`) — `/bot` punya graph sendiri
+- Integrasi dengan CRAG pipeline (`rag/`) — `/bot` punya graph dan collection sendiri
 - Websocket — SSE cukup untuk saat ini
