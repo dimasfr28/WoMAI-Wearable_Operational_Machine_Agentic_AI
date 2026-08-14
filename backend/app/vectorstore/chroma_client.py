@@ -33,6 +33,10 @@ def get_sensor_collection():
     return _get_or_create(settings.CHROMA_COLLECTION_SENSOR)
 
 
+def get_bot_sensor_collection():
+    return _get_or_create(settings.CHROMA_COLLECTION_BOT_SENSOR)
+
+
 def upsert_chunks(collection, ids: list[str], embeddings: list[list[float]], documents: list[str], metadatas: list[dict]):
     collection.upsert(ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
 
