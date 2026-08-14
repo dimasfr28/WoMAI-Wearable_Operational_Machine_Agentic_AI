@@ -66,6 +66,18 @@ class PartPriceOut(BaseModel):
     source_url: str | None
 
 
+class RecommendedActionOut(BaseModel):
+    # feature/current_value/target_value are computed deterministically from
+    # worst_case_delta (Section 6.8), NOT by the LLM — only why/expected_impact
+    # are LLM-generated prose. Keeps the numbers trustworthy; see
+    # generate_early_warning_narrative() in app/rag/final_report.py.
+    feature: str
+    current_value: float
+    target_value: float
+    why: str
+    expected_impact: str
+
+
 class ReportOut(BaseModel):
     sensor: SensorSnapshotOut
     prediction: PredictionOut
@@ -73,6 +85,8 @@ class ReportOut(BaseModel):
     recommendations: RecommendationsOut
     root_cause: RootCauseOut | None = None
     part_prices: list[PartPriceOut] = []
+    ai_explanation: str | None = None
+    recommended_action: RecommendedActionOut | None = None
     final_report_text: str
     llm_model: str
     created_at: datetime
