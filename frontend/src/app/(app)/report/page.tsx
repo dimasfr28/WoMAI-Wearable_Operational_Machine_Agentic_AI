@@ -1,8 +1,21 @@
 "use client";
 
+import type { ComponentType } from "react";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { unstable_rethrow, useSearchParams } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileText,
+  Gauge,
+  Hourglass,
+  MessageCircle,
+  Package,
+  RefreshCw,
+  Sparkles,
+  Thermometer,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +42,28 @@ function riskLevelFor(probability: number): RiskLevel {
   if (probability < 0.3) return "rendah";
   if (probability < 0.6) return "sedang";
   return "tinggi";
+}
+
+function SensorMetricCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <Card className="py-3">
+      <CardContent className="flex items-center gap-3 px-4">
+        <Icon className="size-5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0">
+          <p className="truncate text-xs text-muted-foreground">{label}</p>
+          <p className="text-sm font-semibold tabular-nums">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function ReportContent() {
@@ -125,28 +160,58 @@ function ReportContent() {
 
       {machineId && (
         <>
-          <div className="grid grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Health Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold tabular-nums">
-                  {report ? (
-                    <>
-                      {Math.round(report.prediction.healthScore)}
-                      <span className="text-base font-normal text-muted-foreground">
-                        /100
-                      </span>
-                    </>
+          {report ? (
+            <Card
+              className={cn(
+                report.prediction.predictedLabel
+                  ? "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
+                  : "border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30",
+              )}
+            >
+              <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3">
+                  {report.prediction.predictedLabel ? (
+                    <AlertTriangle className="mt-0.5 size-6 shrink-0 text-red-600 dark:text-red-400" />
                   ) : (
-                    <span className="text-muted-foreground">N/A</span>
+                    <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   )}
+                  <div>
+                    <p className="font-semibold">
+                      {report.prediction.predictedLabel
+                        ? "Kegagalan Diprediksi"
+                        : "Kondisi Normal"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {report.prediction.predictedLabel
+                        ? "Model memprediksi risiko kegagalan pada mesin ini. Tinjau diagnosis di bawah."
+                        : "Tidak ada indikasi kegagalan pada pembacaan sensor terakhir."}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+                  <div className="text-3xl font-bold tabular-nums">
+                    {(report.prediction.failureProbability * 100).toFixed(1)}%
+                  </div>
+                  <Badge
+                    className={
+                      RISK_BADGE[
+                        riskLevelFor(report.prediction.failureProbability)
+                      ]
+                    }
+                  >
+                    Risiko {riskLevelFor(report.prediction.failureProbability)}{" "}
+                    (threshold {(report.prediction.threshold * 100).toFixed(
+                      1,
+                    )}
+                    %)
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Model Output — {report.prediction.modelVersion}
+                  </span>
                 </div>
               </CardContent>
             </Card>
+          ) : (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -154,38 +219,12 @@ function ReportContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {report ? (
-                  <>
-                    <div className="text-3xl font-bold tabular-nums">
-                      {(report.prediction.failureProbability * 100).toFixed(
-                        1,
-                      )}
-                      %
-                    </div>
-                    <Badge
-                      className={cn(
-                        "mt-1",
-                        RISK_BADGE[
-                          riskLevelFor(report.prediction.failureProbability)
-                        ],
-                      )}
-                    >
-                      Risiko{" "}
-                      {riskLevelFor(report.prediction.failureProbability)}{" "}
-                      (threshold {(report.prediction.threshold * 100).toFixed(
-                        1,
-                      )}
-                      %)
-                    </Badge>
-                  </>
-                ) : (
-                  <div className="text-3xl font-bold text-muted-foreground">
-                    N/A
-                  </div>
-                )}
+                <div className="text-3xl font-bold text-muted-foreground">
+                  N/A
+                </div>
               </CardContent>
             </Card>
-          </div>
+          )}
 
           {!report && loaded ? (
             <Card>
@@ -195,67 +234,137 @@ function ReportContent() {
             </Card>
           ) : report ? (
             <>
+              <div>
+                <h2 className="mb-2 text-sm font-medium text-muted-foreground">
+                  Kondisi Mesin Saat Ini
+                </h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <SensorMetricCard
+                    icon={Thermometer}
+                    label="Air Temperature"
+                    value={`${report.sensor.airTemperatureK} K`}
+                  />
+                  <SensorMetricCard
+                    icon={Thermometer}
+                    label="Process Temperature"
+                    value={`${report.sensor.processTemperatureK} K`}
+                  />
+                  <SensorMetricCard
+                    icon={Gauge}
+                    label="Rotational Speed"
+                    value={`${report.sensor.rotationalSpeedRpm} rpm`}
+                  />
+                  <SensorMetricCard
+                    icon={Hourglass}
+                    label="Tool Wear"
+                    value={`${report.sensor.toolWearMin} min`}
+                  />
+                </div>
+              </div>
+
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Sensor Terbaru
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Sparkles className="size-4" />
+                    AI Diagnosis
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <table className="w-full text-sm">
-                    <tbody>
-                      <tr className="border-b">
-                        <td className="py-1.5 text-muted-foreground">
-                          Air Temperature
-                        </td>
-                        <td className="py-1.5 text-right tabular-nums">
-                          {report.sensor.airTemperatureK} K
-                        </td>
-                      </tr>
-                      <tr className="border-b">
-                        <td className="py-1.5 text-muted-foreground">
-                          Process Temperature
-                        </td>
-                        <td className="py-1.5 text-right tabular-nums">
-                          {report.sensor.processTemperatureK} K
-                        </td>
-                      </tr>
-                      <tr className="border-b">
-                        <td className="py-1.5 text-muted-foreground">
-                          Rotational Speed
-                        </td>
-                        <td className="py-1.5 text-right tabular-nums">
-                          {report.sensor.rotationalSpeedRpm} rpm
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="py-1.5 text-muted-foreground">
-                          Tool Wear
-                        </td>
-                        <td className="py-1.5 text-right tabular-nums">
-                          {report.sensor.toolWearMin} min
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="mt-3 flex items-center gap-2">
-                    <Badge
-                      variant={
-                        report.prediction.predictedLabel
-                          ? "destructive"
-                          : "secondary"
-                      }
-                    >
-                      {report.prediction.predictedLabel
-                        ? "FAILURE DIPREDIKSI"
-                        : "NORMAL"}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      model: {report.prediction.modelVersion}
-                    </span>
+                <CardContent className="flex flex-col gap-3 text-sm">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Primary Contributing Factor
+                    </p>
+                    <p>
+                      {report.shap.features.length > 0
+                        ? (() => {
+                            const top =
+                              report.shap.features.find(
+                                (f) => f.rank === 1,
+                              ) ?? report.shap.features[0];
+                            return `${top.featureName} (${
+                              top.shapValue >= 0 ? "+" : ""
+                            }${(top.shapValue * 100).toFixed(2)}% kontribusi)`;
+                          })()
+                        : "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      AI Explanation
+                    </p>
+                    <p>{report.aiExplanation || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Confidence
+                    </p>
+                    <p className="tabular-nums">
+                      {Math.round(
+                        Math.abs(report.prediction.failureProbability - 0.5) *
+                          2 *
+                          100,
+                      )}
+                      %
+                    </p>
                   </div>
                 </CardContent>
               </Card>
+
+              {report.recommendedAction && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Recommended Action
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-2 text-sm">
+                    <p>
+                      <span className="font-medium">
+                        {report.recommendedAction.feature}
+                      </span>
+                      : dari {report.recommendedAction.currentValue} menuju{" "}
+                      {report.recommendedAction.targetValue}
+                    </p>
+                    {report.recommendedAction.why && (
+                      <p className="text-muted-foreground">
+                        {report.recommendedAction.why}
+                      </p>
+                    )}
+                    {report.recommendedAction.expectedImpact && (
+                      <p className="text-muted-foreground">
+                        {report.recommendedAction.expectedImpact}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<Link href="/sop" />}
+                >
+                  <FileText className="size-4" />
+                  Lihat SOP
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<a href="#estimasi-harga-part" />}
+                >
+                  <Package className="size-4" />
+                  Cari Spare Part
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<Link href={`/chat?machine_id=${machineId}`} />}
+                >
+                  <MessageCircle className="size-4" />
+                  Tanya AI Assistant
+                </Button>
+              </div>
 
               <Card>
                 <CardHeader className="pb-2">
@@ -447,7 +556,7 @@ function ReportContent() {
                 </Card>
               )}
 
-              <Card>
+              <Card id="estimasi-harga-part">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
                     Estimasi Harga Part

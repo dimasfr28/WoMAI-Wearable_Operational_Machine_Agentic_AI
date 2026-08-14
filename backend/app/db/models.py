@@ -258,6 +258,11 @@ class FinalReport(Base):
     )
     report_text: Mapped[str] = mapped_column(Text, nullable=False)
     llm_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Early Warning card fields (frontend /report page) — generated once here,
+    # alongside report_text, not recomputed on GET /report/latest. Nullable for
+    # rows predating migration 0011.
+    ai_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommended_action: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
