@@ -136,3 +136,73 @@ def generate_early_warning_narrative(context: EarlyWarningContext) -> dict:
             "why": "",
             "expected_impact": "",
         }
+
+
+@dataclass
+class WhatIfContext:
+    """Konteks untuk narasi perbandingan chatbot what-if (Task 43) -- SELALU
+    membandingkan skenario hipotetis terhadap kondisi mesin NYATA terakhir
+    (bukan simulasi berdiri sendiri), baseline_* None kalau mesin belum
+    pernah punya data sensor sungguhan sama sekali."""
+
+    machine_name: str
+    hypothetical_label: bool
+    hypothetical_probability: float
+    baseline_label: bool | None
+    baseline_probability: float | None
+    top_feature_name: str
+    changed_features: dict[str, float]
+
+
+WHAT_IF_PROMPT = """Anda adalah asisten predictive maintenance untuk mesin CNC Haas.
+Bandingkan skenario hipotetis (what-if) berikut dengan kondisi nyata mesin {machine_name} saat ini.
+Balas dalam Bahasa Indonesia, 2-4 kalimat, sebutkan angka probabilitas kegagalan dari kedua kondisi
+dan apakah risikonya naik/turun/tetap. JANGAN mengarang data yang tidak ada di bawah.
+
+Kondisi nyata terakhir: {baseline_text}
+Skenario hipotetis: {hypothetical_label_text} (probabilitas kegagalan {hypothetical_probability_pct}%)
+Perubahan yang disimulasikan: {changes_text}
+Fitur paling berpengaruh pada skenario hipotetis: {top_feature}
+"""
+
+
+def generate_what_if_narrative(context: WhatIfContext) -> str:
+    if context.baseline_probability is not None:
+        baseline_label_text = "kegagalan diprediksi" if context.baseline_label else "normal"
+        baseline_text = f"{baseline_label_text} (probabilitas kegagalan {round(context.baseline_probability * 100, 1)}%)"
+    else:
+        baseline_text = "(belum ada data sensor sungguhan untuk mesin ini)"
+
+    hypothetical_label_text = "kegagalan diprediksi" if context.hypothetical_label else "normal"
+    changes_text = (
+        "; ".join(f"{k} menjadi {v}" for k, v in context.changed_features.items())
+        or "(tidak ada, memakai data sungguhan terakhir apa adanya)"
+    )
+
+    prompt = WHAT_IF_PROMPT.format(
+        machine_name=context.machine_name,
+        baseline_text=baseline_text,
+        hypothetical_label_text=hypothetical_label_text,
+        hypothetical_probability_pct=round(context.hypothetical_probability * 100, 1),
+        changes_text=changes_text,
+        top_feature=context.top_feature_name,
+    )
+    try:
+        return chat([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL, temperature=0.3)
+    except Exception:
+        logger.exception("generate_what_if_narrative: Groq call failed")
+        if context.baseline_probability is not None:
+            direction = (
+                "naik" if context.hypothetical_probability > context.baseline_probability
+                else "turun" if context.hypothetical_probability < context.baseline_probability
+                else "tetap"
+            )
+            return (
+                f"Skenario hipotetis: probabilitas kegagalan {direction} dari "
+                f"{round(context.baseline_probability * 100, 1)}% menjadi "
+                f"{round(context.hypothetical_probability * 100, 1)}%."
+            )
+        return (
+            f"Skenario hipotetis: probabilitas kegagalan {round(context.hypothetical_probability * 100, 1)}% "
+            "(belum ada data sungguhan mesin ini untuk dibandingkan)."
+        )
