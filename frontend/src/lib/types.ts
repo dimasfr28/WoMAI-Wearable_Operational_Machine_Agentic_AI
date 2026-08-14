@@ -153,6 +153,16 @@ export interface ReportPartPrice {
   sourceUrl: string | null;
 }
 
+// feature/currentValue/targetValue dihitung deterministik backend dari
+// worst_case_delta -- hanya why/expectedImpact yang teks bebas dari LLM.
+export interface ReportRecommendedAction {
+  feature: string;
+  currentValue: number;
+  targetValue: number;
+  why: string;
+  expectedImpact: string;
+}
+
 export interface ReportData {
   sensor: ReportSensorSnapshot;
   prediction: ReportPrediction;
@@ -160,6 +170,8 @@ export interface ReportData {
   recommendations: ReportRecommendations;
   rootCause: ReportRootCause | null;
   partPrices: ReportPartPrice[];
+  aiExplanation: string | null;
+  recommendedAction: ReportRecommendedAction | null;
   finalReportText: string;
   llmModel: string;
   createdAt: string; // ISO

@@ -63,6 +63,14 @@ interface ReportApiOut {
     currency: string;
     source_url: string | null;
   }[];
+  ai_explanation: string | null;
+  recommended_action: {
+    feature: string;
+    current_value: number;
+    target_value: number;
+    why: string;
+    expected_impact: string;
+  } | null;
   final_report_text: string;
   llm_model: string;
   created_at: string;
@@ -145,6 +153,16 @@ function fromApi(r: ReportApiOut): ReportData {
       currency: p.currency,
       sourceUrl: p.source_url,
     })),
+    aiExplanation: r.ai_explanation,
+    recommendedAction: r.recommended_action
+      ? {
+          feature: r.recommended_action.feature,
+          currentValue: r.recommended_action.current_value,
+          targetValue: r.recommended_action.target_value,
+          why: r.recommended_action.why,
+          expectedImpact: r.recommended_action.expected_impact,
+        }
+      : null,
     finalReportText: r.final_report_text,
     llmModel: r.llm_model,
     createdAt: r.created_at,

@@ -91,6 +91,14 @@ const SAMPLE_REPORT = {
       source_url: "https://example.com",
     },
   ],
+  ai_explanation: "Rotational speed rpm adalah faktor paling berpengaruh.",
+  recommended_action: {
+    feature: "Rotational speed rpm",
+    current_value: 2861,
+    target_value: 2636,
+    why: "Menurunkan RPM mengurangi beban mekanis.",
+    expected_impact: "Risiko kegagalan diperkirakan menurun.",
+  },
   final_report_text: "Ringkasan laporan...",
   llm_model: "llama-3.3-70b-versatile",
   created_at: "2026-08-14T00:05:00Z",
@@ -125,6 +133,16 @@ describe("getReportAction", () => {
     ).toEqual({ "Rotational speed rpm": -225 });
     expect(result?.rootCause?.usedWebFallback).toBe(true);
     expect(result?.partPrices[0].partName).toBe("Spindle bearing");
+    expect(result?.aiExplanation).toBe(
+      "Rotational speed rpm adalah faktor paling berpengaruh.",
+    );
+    expect(result?.recommendedAction).toEqual({
+      feature: "Rotational speed rpm",
+      currentValue: 2861,
+      targetValue: 2636,
+      why: "Menurunkan RPM mengurangi beban mekanis.",
+      expectedImpact: "Risiko kegagalan diperkirakan menurun.",
+    });
     expect(mockedBackendFetch).toHaveBeenCalledWith(
       "/report/latest?machine_id=m-1",
       expect.objectContaining({ cache: "no-store" }),
@@ -143,6 +161,19 @@ describe("getReportAction", () => {
     );
     const result = await getReportAction("m-1");
     expect(result?.rootCause).toBeNull();
+  });
+
+  it("maps a null recommended_action to null (not enough historical data)", async () => {
+    mockedBackendFetch.mockResolvedValue(
+      jsonResponse({
+        ...SAMPLE_REPORT,
+        ai_explanation: null,
+        recommended_action: null,
+      }),
+    );
+    const result = await getReportAction("m-1");
+    expect(result?.aiExplanation).toBeNull();
+    expect(result?.recommendedAction).toBeNull();
   });
 
   it("throws on a non-ok, non-404 status", async () => {
