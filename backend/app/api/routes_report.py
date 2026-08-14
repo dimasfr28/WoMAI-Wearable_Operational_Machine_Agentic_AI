@@ -26,12 +26,18 @@ from app.ml.knn_tool import recommend_similar_cases, worst_case_delta
 from app.ml.predictor import RAW_TO_MODEL_COL, PredictionResult, get_model_bundle
 from app.ml.shap_tool import explain_failure_shap
 from app.rag.crag_graph import generate_search_queries, run_crag
-from app.rag.final_report import FinalReportContext, generate_final_report
+from app.rag.final_report import (
+    EarlyWarningContext,
+    FinalReportContext,
+    generate_early_warning_narrative,
+    generate_final_report,
+)
 from app.rag.part_price_search import search_part_price
 from app.schemas.report import (
     PartPriceOut,
     PredictionOut,
     RecommendationsOut,
+    RecommendedActionOut,
     ReportHistoryItemOut,
     ReportOut,
     RetrievedChunkOut,
@@ -46,6 +52,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/report", tags=["report"])
 
 RAW_FEATURE_COLS = ["air_temperature_k", "process_temperature_k", "rotational_speed_rpm", "tool_wear_min"]
+# Reverse of predictor.py's RAW_TO_MODEL_COL — worst_case_delta()'s
+# suggested_adjustments keys are display names (e.g. "Rotational speed rpm"),
+# this maps back to the raw snake_case key needed to read feature_row/
+# nearest_safe_point.
+MODEL_COL_TO_RAW = {v: k for k, v in RAW_TO_MODEL_COL.items()}
 
 
 def _historical_df(db: Session, machine_id: str, limit: int = 5000) -> pd.DataFrame:
@@ -159,6 +170,41 @@ def _run_report_pipeline(
     db.add(Recommendation(prediction_id=prediction.id, recommendation_type="worst_case_delta", payload=wc_delta))
     db.commit()
 
+    # --- Early Warning narrative (AI Diagnosis + Recommended Action, frontend
+    # /report page) — runs regardless of predicted_label, so a NORMAL result
+    # still gets an explanation. feature/current/target computed here in
+    # Python from wc_delta (deterministic); the LLM call only writes prose. ---
+    top_feature_name = shap_result["features"][0]["feature_name"] if shap_result["features"] else "?"
+
+    recommended_action_out: RecommendedActionOut | None = None
+    suggested_adjustments = wc_delta.get("suggested_adjustments") or {}
+    nearest_safe_point = wc_delta.get("nearest_safe_point")
+    if suggested_adjustments and nearest_safe_point:
+        top_adjustment_feature = max(suggested_adjustments, key=lambda k: abs(suggested_adjustments[k]))
+        raw_key = MODEL_COL_TO_RAW.get(top_adjustment_feature)
+        if raw_key is not None and raw_key in nearest_safe_point:
+            recommended_action_out = RecommendedActionOut(
+                feature=top_adjustment_feature,
+                current_value=float(feature_row[raw_key]),
+                target_value=float(nearest_safe_point[raw_key]),
+                why="",
+                expected_impact="",
+            )
+
+    narrative = generate_early_warning_narrative(
+        EarlyWarningContext(
+            predicted_label=pred_result.label,
+            probability=pred_result.probability,
+            top_feature_name=top_feature_name,
+            recommended_feature=recommended_action_out.feature if recommended_action_out else None,
+            recommended_current=recommended_action_out.current_value if recommended_action_out else None,
+            recommended_target=recommended_action_out.target_value if recommended_action_out else None,
+        )
+    )
+    if recommended_action_out is not None:
+        recommended_action_out.why = narrative["why"]
+        recommended_action_out.expected_impact = narrative["expected_impact"]
+
     # --- 6.9 / 6.10 RAG + part price (only if predicted failure) ---
     root_cause_out: RootCauseOut | None = None
     part_price_out: list[PartPriceOut] = []
@@ -255,7 +301,13 @@ def _run_report_pipeline(
     )
     report_text = generate_final_report(context)
 
-    final_report = FinalReport(prediction_id=prediction.id, report_text=report_text, llm_model=settings.GROQ_MODEL)
+    final_report = FinalReport(
+        prediction_id=prediction.id,
+        report_text=report_text,
+        llm_model=settings.GROQ_MODEL,
+        ai_explanation=narrative["ai_explanation"],
+        recommended_action=recommended_action_out.model_dump() if recommended_action_out else None,
+    )
     db.add(final_report)
     db.commit()
     db.refresh(final_report)
@@ -285,6 +337,8 @@ def _run_report_pipeline(
         ),
         root_cause=root_cause_out,
         part_prices=part_price_out,
+        ai_explanation=narrative["ai_explanation"],
+        recommended_action=recommended_action_out,
         final_report_text=report_text,
         llm_model=settings.GROQ_MODEL,
         created_at=final_report.created_at,
@@ -458,6 +512,10 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
         recommendations=recommendations_out,
         root_cause=root_cause_out,
         part_prices=part_prices_out,
+        ai_explanation=final_report.ai_explanation,
+        recommended_action=(
+            RecommendedActionOut(**final_report.recommended_action) if final_report.recommended_action else None
+        ),
         final_report_text=final_report.report_text,
         llm_model=final_report.llm_model,
         created_at=final_report.created_at,

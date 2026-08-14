@@ -26,13 +26,15 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from fastapi import HTTPException
 
-from app.api.routes_report import _run_report_pipeline
+from app.api.routes_report import RAW_FEATURE_COLS, _historical_df, _run_report_pipeline
 from app.api.routes_report import get_latest_report as _get_latest_report
 from app.api.routes_sensor import _bump_failure_count_if_needed, assign_run_id
-from app.db.models import ChatMessage, ChatSession, Machine, SensorReading, Sop, User
+from app.db.models import ChatMessage, ChatSession, Machine, Prediction, SensorReading, SensorRun, Sop, User
 from app.db.session import SessionLocal
 from app.llm.groq_client import chat, chat_json
-from app.ml.predictor import predict_failure
+from app.ml.predictor import RAW_TO_MODEL_COL, PredictionResult, predict_failure
+from app.ml.shap_tool import explain_failure_shap
+from app.rag.final_report import WhatIfContext, generate_what_if_narrative
 from app.schemas.chat import ChatIn
 from app.schemas.sensor import SensorReadingIn
 
@@ -41,7 +43,7 @@ router = APIRouter(tags=["chat"])
 SYSTEM_PROMPT_INTENT = """Kamu adalah pengklasifikasi intent untuk asisten pemeliharaan prediktif mesin CNC Haas.
 Baca pesan user dan balas HANYA JSON dengan skema persis ini (tanpa teks lain):
 {{
-  "intent": "predict" | "latest_report" | "sop_lookup" | "chitchat",
+  "intent": "predict" | "latest_report" | "sop_lookup" | "what_if" | "chitchat",
   "machine_id": "<uuid dari daftar mesin di bawah, atau null>",
   "air_temperature_k": <angka atau null>,
   "process_temperature_k": <angka atau null>,
@@ -51,10 +53,11 @@ Baca pesan user dan balas HANYA JSON dengan skema persis ini (tanpa teks lain):
 }}
 
 Aturan:
-- "predict": user menyebutkan kondisi/nilai sensor mesin dan ingin tahu apakah mesin akan gagal.
+- "predict": user menyebutkan kondisi/nilai sensor mesin dan ingin tahu apakah mesin akan gagal — data ini akan DISIMPAN sebagai pembacaan sensor sungguhan.
 - "latest_report": user menanyakan laporan/prediksi/status terakhir suatu mesin.
 - "sop_lookup": user menanyakan cara menangani suatu gejala/masalah, TANPA menyebut nilai sensor baru.
-- "chitchat": sapaan atau pertanyaan umum yang tidak cocok tiga kategori di atas.
+- "what_if": user bertanya "bagaimana jika" / "seandainya" suatu nilai sensor diubah — simulasi HIPOTETIS, TIDAK disimpan sebagai data sungguhan. User boleh menyebut hanya SEBAGIAN nilai sensor (sisanya memakai data sungguhan terakhir mesin itu).
+- "chitchat": sapaan atau pertanyaan umum yang tidak cocok kategori di atas.
 - machine_id HARUS salah satu dari daftar di bawah (cocokkan nama mesin yang disebut user), atau null kalau tidak disebut/tidak cocok.
 - Field sensor: HANYA isi kalau user menyebutkan angkanya secara eksplisit di pesan ini. Jangan menebak.
 
@@ -289,6 +292,120 @@ def _run_latest_report(db: Session, intent_data: dict, sops: list[Sop]):
     yield {"type": "text", "delta": report.final_report_text}
 
 
+def _hypothetical_prediction_event_data(result: PredictionResult) -> dict:
+    return {
+        "label": result.label,
+        "probability": result.probability,
+        "healthScore": round((1 - result.probability) * 100, 2),
+        "riskLevel": _risk_level(result.probability),
+    }
+
+
+def _shap_dict_to_event_data(shap_result: dict) -> dict:
+    return {
+        "contributions": [
+            {"feature": f["feature_name"], "value": f["shap_value"]} for f in shap_result["features"]
+        ],
+    }
+
+
+def _run_what_if(db: Session, intent_data: dict):
+    """Simulasi hipotetis: TIDAK menulis ke sensor_readings/sensor_runs/predictions
+    (lihat WhatIfContext di app/rag/final_report.py) -- predict_failure()+
+    explain_failure_shap() dipanggil murni in-memory, supaya data simulasi tidak
+    pernah tercampur dengan data sensor sungguhan (termasuk feed ESP32 nanti)."""
+    machine_id = intent_data.get("machine_id")
+    if not machine_id:
+        yield {"type": "needs_input", "message": "Mesin mana yang mau disimulasikan?"}
+        return
+
+    yield {"type": "status", "message": "Menjalankan simulasi what-if..."}
+
+    baseline_reading = (
+        db.query(SensorReading)
+        .join(SensorRun, SensorRun.id == SensorReading.run_id)
+        .filter(SensorRun.machine_id == machine_id)
+        .order_by(SensorReading.reading_timestamp.desc())
+        .first()
+    )
+
+    baseline_feature_row: dict | None = None
+    if baseline_reading is not None:
+        baseline_feature_row = {
+            "air_temperature_k": float(baseline_reading.air_temperature_k),
+            "process_temperature_k": float(baseline_reading.process_temperature_k),
+            "rotational_speed_rpm": int(baseline_reading.rotational_speed_rpm),
+            "tool_wear_min": float(baseline_reading.tool_wear_min),
+        }
+
+    hypothetical_feature_row: dict = dict(baseline_feature_row) if baseline_feature_row else {}
+    changed_features: dict[str, float] = {}
+    for raw_key in RAW_FEATURE_COLS:
+        if intent_data.get(raw_key) is not None:
+            hypothetical_feature_row[raw_key] = intent_data[raw_key]
+            changed_features[RAW_TO_MODEL_COL[raw_key]] = intent_data[raw_key]
+
+    missing = [f for f in RAW_FEATURE_COLS if hypothetical_feature_row.get(f) is None]
+    if missing:
+        labels = ", ".join(MISSING_FIELD_LABEL[f] for f in missing)
+        yield {
+            "type": "needs_input",
+            "message": (
+                f"Belum ada data sensor tersimpan untuk mesin ini, jadi sebutkan {labels} "
+                "supaya saya bisa simulasikan."
+            ),
+        }
+        return
+
+    hypothetical_result = predict_failure(hypothetical_feature_row)
+
+    historical_df = _historical_df(db, machine_id)
+    if len(historical_df) >= 5:
+        shap_result = explain_failure_shap(hypothetical_feature_row, historical_df)
+    else:
+        shap_result = {
+            "base_value": hypothetical_result.probability,
+            "features": [
+                {
+                    "feature_name": RAW_TO_MODEL_COL[f],
+                    "value": hypothetical_feature_row[f],
+                    "shap_value": 0.0,
+                    "rank": i + 1,
+                }
+                for i, f in enumerate(RAW_FEATURE_COLS)
+            ],
+        }
+
+    baseline_prediction: Prediction | None = None
+    if baseline_reading is not None:
+        baseline_prediction = (
+            db.query(Prediction)
+            .filter(Prediction.sensor_reading_id == baseline_reading.id)
+            .order_by(Prediction.created_at.desc())
+            .first()
+        )
+
+    yield {"type": "prediction", "data": _hypothetical_prediction_event_data(hypothetical_result)}
+    yield {"type": "shap", "data": _shap_dict_to_event_data(shap_result)}
+
+    machine_row = db.query(Machine).filter(Machine.id == machine_id).first()
+    top_feature_name = shap_result["features"][0]["feature_name"] if shap_result["features"] else "?"
+    narrative = generate_what_if_narrative(
+        WhatIfContext(
+            machine_name=machine_row.name if machine_row else "mesin ini",
+            hypothetical_label=hypothetical_result.label,
+            hypothetical_probability=hypothetical_result.probability,
+            baseline_label=baseline_prediction.predicted_label if baseline_prediction else None,
+            baseline_probability=(
+                float(baseline_prediction.failure_probability) if baseline_prediction else None
+            ),
+            top_feature_name=top_feature_name,
+            changed_features=changed_features,
+        )
+    )
+    yield {"type": "text", "delta": narrative}
+
+
 def _run_sop_lookup(intent_data: dict, sops: list[Sop]):
     query = intent_data.get("sop_query") or ""
     yield {"type": "status", "message": "Mencari SOP relevan..."}
@@ -332,6 +449,8 @@ def chat_endpoint(payload: ChatIn, user: User = Depends(get_current_user)):
                 generator = _run_predict(db, user, intent_data, sops)
             elif intent == "latest_report":
                 generator = _run_latest_report(db, intent_data, sops)
+            elif intent == "what_if":
+                generator = _run_what_if(db, intent_data)
             elif intent == "sop_lookup":
                 generator = _run_sop_lookup(intent_data, sops)
             else:
