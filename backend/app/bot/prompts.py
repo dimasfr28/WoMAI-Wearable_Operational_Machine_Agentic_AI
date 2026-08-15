@@ -72,11 +72,11 @@ Aturan Penentuan:
    - Set `clarification_message: null`
 
 Format output HARUS berupa JSON valid persis seperti berikut (tanpa markdown codeblock atau teks lain):
-{
+{{
   "resolved_machine_id": "<UUID mesin atau null>",
   "is_ambiguous": true | false,
   "clarification_message": "<Pesan klarifikasi jika is_ambiguous=true, atau null jika false>"
-}
+}}
 """
 
 
@@ -144,18 +144,18 @@ Aturan Keputusan:
 Format output HARUS berupa JSON valid persis seperti salah satu berikut:
 
 Jika ingin memanggil tool:
-{
+{{
   "action": "call_tool",
   "tool_name": "search_sensor_data" | "list_machines" | "get_machine_info",
-  "tool_args": { ... },
+  "tool_args": {{ ... }},
   "status_message": "<Pesan status singkat Bahasa Indonesia untuk user, misal: 'Mencari data sensor mesin...'>"
-}
+}}
 
 Jika sudah cukup data dan siap menyusun jawaban:
-{
+{{
   "action": "finish",
   "status_message": "Menyusun jawaban..."
-}
+}}
 """
 
 
