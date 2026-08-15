@@ -4,12 +4,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  Factory,
   FileBarChart,
   FileText,
   History,
   LogOut,
   MessageSquarePlus,
+  Stethoscope,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,15 +27,24 @@ import {
 } from "@/components/ui/sidebar";
 import { signOutAction } from "@/app/actions/auth";
 import { useSessions } from "@/hooks/use-sessions";
+import { useActiveMachine } from "@/hooks/use-active-machine";
+import { clearActiveMachineId } from "@/lib/active-machine";
 
 export function AppSidebar() {
   const { sessions } = useSessions();
+  const { machine } = useActiveMachine();
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
 
   function closeOnMobile() {
     if (isMobile) setOpenMobile(false);
   }
+
+  // Sesi ditampilkan di "Machine Copilot" hanya milik mesin aktif — sesi
+  // untuk mesin lain tidak relevan begitu satu mesin sedang aktif dipilih.
+  const machineSessions = machine
+    ? sessions.filter((s) => s.machineId === machine.id)
+    : sessions;
 
   return (
     <Sidebar collapsible="icon">
@@ -69,57 +78,76 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {machine && (
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+            <SidebarGroupContent>
+              <Link
+                href="/mesin"
+                onClick={closeOnMobile}
+                className="flex items-center justify-between rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <span className="truncate">Mesin: {machine.name}</span>
+                <span className="shrink-0 underline">Ganti</span>
+              </Link>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Chat Baru"
+                  tooltip="New Consultation"
                   isActive={pathname === "/chat"}
                   render={<Link href="/chat" onClick={closeOnMobile} />}
                 >
                   <MessageSquarePlus />
-                  <span>Chat Baru</span>
+                  <span>New Consultation</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Mesin"
-                  isActive={pathname === "/mesin"}
-                  render={<Link href="/mesin" onClick={closeOnMobile} />}
+                  tooltip="Machine Diagnosis"
+                  isActive={pathname === "/machine-diagnosis"}
+                  render={
+                    <Link href="/machine-diagnosis" onClick={closeOnMobile} />
+                  }
                 >
-                  <Factory />
-                  <span>Mesin</span>
+                  <Stethoscope />
+                  <span>Machine Diagnosis</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="SOP File"
+                  tooltip="Machine Report"
+                  isActive={pathname === "/machine-report"}
+                  render={
+                    <Link href="/machine-report" onClick={closeOnMobile} />
+                  }
+                >
+                  <FileBarChart />
+                  <span>Machine Report</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Knowledge Base"
                   isActive={pathname === "/sop"}
                   render={<Link href="/sop" onClick={closeOnMobile} />}
                 >
                   <FileText />
-                  <span>SOP File</span>
+                  <span>Knowledge Base</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Riwayat"
+                  tooltip="Machine Copilot"
                   isActive={pathname === "/riwayat"}
                   render={<Link href="/riwayat" onClick={closeOnMobile} />}
                 >
                   <History />
-                  <span>Riwayat</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="Laporan"
-                  isActive={pathname === "/report"}
-                  render={<Link href="/report" onClick={closeOnMobile} />}
-                >
-                  <FileBarChart />
-                  <span>Laporan</span>
+                  <span>Machine Copilot</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -127,10 +155,10 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-          <SidebarGroupLabel>Terbaru</SidebarGroupLabel>
+          <SidebarGroupLabel>Conversation History</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {sessions.slice(0, 10).map((s) => (
+              {machineSessions.slice(0, 10).map((s) => (
                 <SidebarMenuItem key={s.id}>
                   <SidebarMenuButton
                     isActive={pathname === `/chat/${s.id}`}
@@ -142,7 +170,7 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              {sessions.length === 0 && (
+              {machineSessions.length === 0 && (
                 <p className="text-muted-foreground px-2 py-1.5 text-sm">
                   Belum ada percakapan.
                 </p>
@@ -155,7 +183,15 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <form action={signOutAction}>
+            <form
+              action={signOutAction}
+              // Mesin aktif (localStorage, TIDAK ikut terhapus oleh
+              // signOutAction() — itu Server Action, tidak punya akses ke
+              // localStorage) dibersihkan di sini sebelum form men-submit ke
+              // server, supaya user berikutnya yang login di browser/tab yang
+              // sama tidak mewarisi mesin aktif dari sesi sebelumnya.
+              onSubmit={() => clearActiveMachineId()}
+            >
               <SidebarMenuButton
                 type="submit"
                 tooltip="Keluar"

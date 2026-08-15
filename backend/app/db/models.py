@@ -191,6 +191,14 @@ class Prediction(Base):
     # so GET /report/latest can reconstruct ShapExplanationOut.base_value purely from
     # the DB (no re-running SHAP). Nullable for rows predating this column.
     shap_base_value: Mapped[float | None] = mapped_column(Numeric(10, 6), nullable=True)
+    # Horizon model ("Probability Failure in +10 Minute", rancangan.txt Section
+    # 5) — separate model/question from predicted_label above, stored alongside
+    # since it's computed once per reading in the same pipeline. Nullable
+    # because the horizon model can fail/be unavailable independently of the
+    # main classification model succeeding.
+    horizon_predicted_label: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    horizon_failure_probability: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    horizon_model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -263,6 +271,38 @@ class FinalReport(Base):
     # rows predating migration 0011.
     ai_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
     recommended_action: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Machine Diagnosis "AI Explanation" panel (rancangan.txt Section 5,
+    # migration 0013) — cause_analysis_short: root_cause ringkas (maks 1
+    # kalimat/40 kata, 1 part), null kalau predicted_label=False.
+    # suggestion_general: saran perbaikan istilah general/non-numerik, null
+    # kalau tidak ada rekomendasi penyesuaian.
+    cause_analysis_short: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggestion_general: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MachineReport(Base):
+    """Machine Report — formal PDF report (rancangan.txt Section 7), one row
+    per generated PDF. Rendered once per sensor reading alongside FinalReport
+    (see app/reports/report_pdf.py), stored on disk under a per-day folder
+    scheme (app/reports/generator.py's report_dir()), referenced here by
+    relative path so the physical layout can change without a migration."""
+
+    __tablename__ = "machine_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
+    machine_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    prediction_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("predictions.id", ondelete="CASCADE"), nullable=False
+    )
+    # Human-facing report number, e.g. "RPT-20260815-001" — unique per day per
+    # machine (sequence resets daily, scoped to machine_id).
+    report_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    # Relative to REPORTS_DIR (settings) — "<machine_id>/<YYYY-MM-DD>/<report_number>.pdf".
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    operating_status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

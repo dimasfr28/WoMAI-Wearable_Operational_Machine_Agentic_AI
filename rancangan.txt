@@ -1,1 +1,7 @@
-saya ingin merubah hasil dari page report men
+1. hilangkan source prace di report
+
+Price Source
+Source: Marketplace (Alibaba/Shopee/Tokopedia/Lazada). Retrieved: 15 August 2026,
+13:41 UTC
+
+2. buatkan saya readme.md tentang fitur fitur yang sudah dibuat disini dan apa manfaat setiap page fitur bagaimana sistem bekerja dll

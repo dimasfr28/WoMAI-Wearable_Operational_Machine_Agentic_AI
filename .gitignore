@@ -3,6 +3,8 @@
 .env.*
 !.env.example
 
+.txt
+
 # Node / frontend
 node_modules/
 dist/
@@ -25,6 +27,13 @@ backend/saved/*.pkl
 # Data (large or host-mounted, not meant to be committed)
 backend/seed_data/pdf_markdown/
 *.csv
+
+# Machine Report PDFs (generated at runtime, dev bind-mount lands them on host)
+backend/reports/
+
+# Data backup archives (scripts/backup-data.sh output) — contains real user
+# accounts and uploaded documents, never meant to be committed
+backups/
 
 # Editor / OS
 .vscode/

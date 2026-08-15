@@ -1,4 +1,45 @@
 services:
+  # MinerU (PDF -> Markdown parsing) runs as its own long-lived service so
+  # day-to-day backend code changes (dependency bumps, route edits, etc.) stop
+  # invalidating the Docker layer cache for its multi-hundred-MB model
+  # download — that cache-busting was the whole reason this split exists.
+  # `backend` talks to it purely over HTTP (see backend/vendor/mineru_client.py).
+  mineru-service:
+    build:
+      context: ./mineru-service
+      dockerfile: Dockerfile.dev
+    volumes:
+      # Own volume (separate from embedding_cache/backend's bind-mount) so a
+      # backend rebuild can never affect this image's cached model, and
+      # vice versa.
+      - mineru_cache:/app/.cache
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+
+  # Embedding (sentence-transformers) runs as its own service for the same
+  # cache-busting reason as mineru-service above — `backend` talks to it over
+  # HTTP (see backend/app/ingestion/embedder.py).
+  embedding-service:
+    build:
+      context: ./embedding-service
+      dockerfile: Dockerfile.dev
+    volumes:
+      - embedding_cache:/app/.cache
+    ports:
+      - "8004:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
   backend:
     build:
       context: ./backend
@@ -19,6 +60,14 @@ services:
       - SYS_ADMIN
     depends_on:
       postgres:
+        condition: service_healthy
+      # `alembic upgrade head` (this container's own startup CMD) runs a
+      # migration (0003_seed_dataset_sensor_chunks.py) that calls embed_texts()
+      # — embedding-service must be actually ready (model loaded, /health
+      # passing), not just "container started", before backend starts.
+      mineru-service:
+        condition: service_healthy
+      embedding-service:
         condition: service_healthy
     ports:
       # Host port changed from 8000 -> 8002: an unrelated container ("led-api",
@@ -41,3 +90,7 @@ services:
       - backend
     ports:
       - "3000:3000"
+
+volumes:
+  mineru_cache:
+  embedding_cache:

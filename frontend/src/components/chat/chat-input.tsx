@@ -5,8 +5,6 @@ import { useState } from "react";
 import { SendHorizonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MachinePicker } from "@/components/chat/machine-picker";
-import { ManualInputDialog } from "@/components/chat/manual-input-dialog";
 import type { Machine } from "@/lib/types";
 
 const MAX_LENGTH = 2000;
@@ -14,16 +12,10 @@ const MAX_LENGTH = 2000;
 interface ChatInputProps {
   disabled: boolean;
   onSend: (text: string) => void;
-  machine: Machine | null;
-  onMachineChange: (m: Machine | null) => void;
+  machine: Machine;
 }
 
-export function ChatInput({
-  disabled,
-  onSend,
-  machine,
-  onMachineChange,
-}: ChatInputProps) {
+export function ChatInput({ disabled, onSend, machine }: ChatInputProps) {
   const [input, setInput] = useState("");
 
   function submit() {
@@ -35,18 +27,16 @@ export function ChatInput({
 
   return (
     <div className="border-t bg-background p-4">
-      {machine && (
-        <div className="mx-auto mb-2 flex w-full max-w-3xl justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
-            render={<Link href={`/report?machine_id=${machine.id}`} />}
-          >
-            Lihat laporan lengkap →
-          </Button>
-        </div>
-      )}
+      <div className="mx-auto mb-2 flex w-full max-w-3xl justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+          render={<Link href="/machine-report" />}
+        >
+          Lihat laporan lengkap →
+        </Button>
+      </div>
       <form
         className="mx-auto flex w-full max-w-3xl items-end gap-2"
         onSubmit={(e) => {
@@ -54,15 +44,6 @@ export function ChatInput({
           submit();
         }}
       >
-        <MachinePicker
-          value={machine}
-          onChange={onMachineChange}
-          disabled={disabled}
-        />
-        <ManualInputDialog
-          disabled={disabled}
-          onSend={onSend}
-        />
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -74,9 +55,7 @@ export function ChatInput({
           }}
           maxLength={MAX_LENGTH}
           rows={2}
-          placeholder={
-            "Ketik kondisi mesin, mis. “motor line 3 suhu prosesnya 310K, torsi 45 Nm…”"
-          }
+          placeholder={`Tanyakan sesuatu tentang ${machine.name}…`}
           className="min-h-0 resize-none"
         />
         <Button type="submit" size="icon" disabled={disabled || !input.trim()}>

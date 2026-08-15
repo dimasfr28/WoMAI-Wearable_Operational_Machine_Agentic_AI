@@ -20,7 +20,8 @@ from app.db.models import Document, DocumentChunk, Machine, SensorReading, Senso
 from app.db.session import get_db
 from app.ingestion.chunking_sensor import ReadingLike, RunLike, build_run_chunk
 from app.ingestion.embedder import embed_texts
-from app.ml.predictor import get_model_bundle, predict_failure
+from app.ml.outlier import RunIqrBounds, compute_run_iqr_bounds, is_value_outlier
+from app.ml.predictor_clasification import predict_failure
 from app.schemas.sensor import (
     SensorHistoryOut,
     SensorHistoryPointOut,
@@ -370,34 +371,18 @@ def list_runs(machine_id: str, db: Session = Depends(get_db)):
     ]
 
 
-def _is_anomaly(air_k: float, process_k: float, rpm: int, wear: float) -> bool:
-    """IQR-bounds check (best_performance_log.json, same bounds used by
-    predictor.py's outlier features and crag_graph.py's SHAP interpretation) —
-    an anomaly is any of the three bounded quantities falling outside the range
-    seen in training data. Air/Process temperature individually have no bounds
-    of their own; temp_diff (Process - Air) does, which is why the check uses
-    the derived value rather than either raw temperature."""
-    bundle = get_model_bundle()
-    lower, upper = bundle.lower_bound, bundle.upper_bound
-
-    temp_diff = process_k - air_k
-    td_hi, td_lo = upper.get("temp_diff"), lower.get("temp_diff")
-    if td_hi is not None and temp_diff > td_hi:
-        return True
-    if td_lo is not None and temp_diff < td_lo:
-        return True
-
-    rpm_hi, rpm_lo = upper.get("Rotational speed rpm"), lower.get("Rotational speed rpm")
-    if rpm_hi is not None and rpm > rpm_hi:
-        return True
-    if rpm_lo is not None and rpm < rpm_lo:
-        return True
-
-    wear_hi = upper.get("Tool wear min")
-    if wear_hi is not None and wear > wear_hi:
-        return True
-
-    return False
+def _is_anomaly(air_k: float, process_k: float, rpm: int, wear: float, bounds: RunIqrBounds) -> bool:
+    """IQR outlier check (rancangan.txt: "outlier detection menggunakan IQR
+    untuk setiap RUN ID") — bounds dihitung on-the-fly dari readings dalam run
+    yang sama (lihat app/ml/outlier.py), bukan dari bound statis global
+    training seperti sebelumnya. Anomaly kalau SALAH SATU dari 4 parameter
+    mentah berada di luar bound Tukey (Q1-1.5*IQR, Q3+1.5*IQR) run ini."""
+    return (
+        is_value_outlier(air_k, bounds.air_temperature_k)
+        or is_value_outlier(process_k, bounds.process_temperature_k)
+        or is_value_outlier(rpm, bounds.rotational_speed_rpm)
+        or is_value_outlier(wear, bounds.tool_wear_min)
+    )
 
 
 def _param_stats(values: list[float]) -> SensorParamStatsOut:
@@ -442,6 +427,18 @@ def get_readings_history(machine_id: str, db: Session = Depends(get_db)):
         .all()
     )
 
+    run_bounds = compute_run_iqr_bounds(
+        [
+            {
+                "air_temperature_k": r.air_temperature_k,
+                "process_temperature_k": r.process_temperature_k,
+                "rotational_speed_rpm": r.rotational_speed_rpm,
+                "tool_wear_min": r.tool_wear_min,
+            }
+            for r in rows
+        ]
+    )
+
     points = []
     air_vals, proc_vals, rpm_vals, wear_vals = [], [], [], []
     for r in rows:
@@ -460,7 +457,7 @@ def get_readings_history(machine_id: str, db: Session = Depends(get_db)):
                 process_temperature_k=proc,
                 rotational_speed_rpm=rpm,
                 tool_wear_min=wear,
-                is_anomaly=_is_anomaly(air, proc, rpm, wear),
+                is_anomaly=_is_anomaly(air, proc, rpm, wear, run_bounds),
             )
         )
 

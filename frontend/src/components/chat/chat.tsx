@@ -6,7 +6,6 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { ChatInput } from "@/components/chat/chat-input";
 import { ChatMessages } from "@/components/chat/chat-messages";
-import { getMachine, MACHINES_CHANGED_EVENT } from "@/lib/machines";
 import { deriveTitle, saveSession } from "@/lib/storage";
 import type { Machine, PredictionResult, WomaiMessage } from "@/lib/types";
 
@@ -15,7 +14,7 @@ interface ChatProps {
   initialMessages: WomaiMessage[];
   initialCheckedSteps?: Record<string, boolean>;
   initialCreatedAt?: string;
-  initialMachine?: Machine | null;
+  machine: Machine;
 }
 
 function firstUserText(messages: WomaiMessage[]): string {
@@ -44,7 +43,7 @@ export function Chat({
   initialMessages,
   initialCheckedSteps,
   initialCreatedAt,
-  initialMachine,
+  machine,
 }: ChatProps) {
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [checkedSteps, setCheckedSteps] = useState<Record<string, boolean>>(
@@ -56,31 +55,6 @@ export function Chat({
     checkedStepsRef.current = checkedSteps;
   });
 
-  const [machine, setMachine] = useState<Machine | null>(initialMachine ?? null);
-  const machineRef = useRef(machine);
-  // Keep machineRef in sync after every render so persist always reads the latest value
-  useEffect(() => {
-    machineRef.current = machine;
-  });
-
-  // Rename mesin menyebar ke picker sesi yang sedang terbuka; mesin terhapus
-  // mempertahankan snapshot terakhir
-  useEffect(() => {
-    const refresh = () => {
-      const cur = machineRef.current;
-      if (!cur) return;
-      getMachine(cur.id)
-        .then((m) => {
-          if (m) setMachine(m);
-        })
-        .catch(() => {
-          // biarkan snapshot terakhir bila gagal memuat
-        });
-    };
-    window.addEventListener(MACHINES_CHANGED_EVENT, refresh);
-    return () => window.removeEventListener(MACHINES_CHANGED_EVENT, refresh);
-  }, []);
-
   const createdAtRef = useRef(initialCreatedAt ?? new Date().toISOString());
   const urlUpdatedRef = useRef(false);
   const pathname = usePathname();
@@ -89,16 +63,19 @@ export function Chat({
     useChat<WomaiMessage>({
       id: sessionId,
       messages: initialMessages,
-      transport: new DefaultChatTransport({ api: "/api/chat" }),
+      transport: new DefaultChatTransport({
+        api: "/api/chat",
+        // machineId dikirim di setiap request supaya backend tidak perlu
+        // menebak/menanyakan mesin dari isi pesan (rancangan.txt Section 8)
+        // — mesin sudah dipilih secara global sebelum masuk chat.
+        body: { machineId: machine.id },
+      }),
       onData: (part) => {
         if (part.type === "data-status") setAgentStatus(part.data.message);
       },
     });
 
-  function persist(
-    msgs: WomaiMessage[],
-    checked: Record<string, boolean>,
-  ) {
+  function persist(msgs: WomaiMessage[], checked: Record<string, boolean>) {
     const cleanMessages = msgs.map((m) => ({
       ...m,
       parts: m.parts.filter((p) => p.type !== "step-start"),
@@ -111,8 +88,8 @@ export function Chat({
       messages: cleanMessages,
       lastPrediction: lastPredictionOf(msgs),
       checkedSteps: checked,
-      machineId: machineRef.current?.id,
-      machineName: machineRef.current?.name,
+      machineId: machine.id,
+      machineName: machine.name,
     }).catch(() => {
       // Simpan gagal (mis. offline) — sesi tetap tampil di layar
     });
@@ -137,16 +114,6 @@ export function Chat({
     setCheckedSteps(next);
   }
 
-  function handleMachineChange(m: Machine | null) {
-    // Sync ref eagerly so persist reads the new value immediately
-    machineRef.current = m;
-    setMachine(m);
-    // Persist immediately when user changes machine mid-session
-    if (messages.length > 0) {
-      persist(messages, checkedStepsRef.current);
-    }
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ChatMessages
@@ -162,7 +129,6 @@ export function Chat({
         disabled={status === "submitted" || status === "streaming"}
         onSend={(text) => sendMessage({ text })}
         machine={machine}
-        onMachineChange={handleMachineChange}
       />
     </div>
   );

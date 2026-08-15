@@ -3,6 +3,15 @@ use_default_settings: true
 general:
   instance_name: "comfest-searxng"
 
+engines:
+  # Fetches property metadata from query.wikidata.org (SPARQL) at startup;
+  # if that request fails (network/timeout/blocked), the whole SearXNG
+  # container crashes instead of just disabling the engine. Not needed here —
+  # part_price_search.py / crag_graph.py only use plain /search?format=json
+  # keyword search, never Wikidata entity lookups.
+  - name: wikidata
+    disabled: true
+
 search:
   safe_search: 0
   autocomplete: ""

@@ -3,6 +3,7 @@ import {
   createUIMessageStreamResponse,
 } from "ai";
 import { pickScenario } from "@/lib/mock/scenarios";
+import { getSessionToken } from "@/lib/auth/session";
 import type { WomaiMessage } from "@/lib/types";
 
 // URL backend (server-side). Di Docker: http://backend:8000; lokal: localhost.
@@ -26,9 +27,13 @@ function lastUserText(messages: WomaiMessage[]): string {
 }
 
 export async function POST(req: Request) {
-  let body: { messages?: WomaiMessage[]; id?: string };
+  let body: { messages?: WomaiMessage[]; id?: string; machineId?: string };
   try {
-    body = (await req.json()) as { messages?: WomaiMessage[]; id?: string };
+    body = (await req.json()) as {
+      messages?: WomaiMessage[];
+      id?: string;
+      machineId?: string;
+    };
   } catch {
     return Response.json({ error: "Body harus JSON valid" }, { status: 400 });
   }
@@ -38,10 +43,20 @@ export async function POST(req: Request) {
 
   // Coba backend deep-agent; fallback ke mock bila tidak terjangkau.
   try {
+    const token = await getSessionToken();
     const resp = await fetch(`${BACKEND_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, session_id: sessionId }),
+      headers: {
+        "Content-Type": "application/json",
+        // POST /chat butuh auth (Depends(get_current_user)) — tanpa header
+        // ini backend selalu balas 401 dan permintaan jatuh ke mockStream().
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        message: text,
+        session_id: sessionId,
+        machine_id: body.machineId ?? null,
+      }),
       signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
     });
     if (!resp.ok || !resp.body) throw new Error(`backend ${resp.status}`);

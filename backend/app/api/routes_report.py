@@ -12,6 +12,7 @@ from app.db.models import (
     DocumentChunk,
     FinalReport,
     Machine,
+    MachineReport,
     PartPriceLookup,
     Prediction,
     Recommendation,
@@ -23,17 +24,26 @@ from app.db.models import (
 from app.db.session import get_db
 from app.config import settings
 from app.ml.knn_tool import recommend_similar_cases, worst_case_delta
-from app.ml.predictor import RAW_TO_MODEL_COL, PredictionResult, get_model_bundle
+from app.ml.outlier import compute_run_iqr_bounds
+from app.ml.predictor_clasification import RAW_TO_MODEL_COL, ClasificationResult
+from app.ml.predictor_clasification import get_model_bundle as get_clasification_bundle
+from app.ml.predictor_horizon import get_model_bundle as get_horizon_bundle
+from app.ml.predictor_horizon import predict_failure_horizon
 from app.ml.shap_tool import explain_failure_shap
-from app.rag.crag_graph import generate_search_queries, run_crag
+from app.rag.crag_graph import extract_part_names, generate_search_queries, run_crag, summarize_cause_analysis
 from app.rag.final_report import (
     EarlyWarningContext,
     FinalReportContext,
     generate_early_warning_narrative,
     generate_final_report,
+    generate_suggestion_general,
 )
 from app.rag.part_price_search import search_part_price
+from app.reports import report_folder
+from app.reports.report_narrative import generate_machine_report_narrative
+from app.reports.report_pdf import ConditionLogRow, render_machine_report_pdf
 from app.schemas.report import (
+    HorizonPredictionOut,
     PartPriceOut,
     PredictionOut,
     RecommendationsOut,
@@ -88,8 +98,88 @@ def _historical_df(db: Session, machine_id: str, limit: int = 5000) -> pd.DataFr
     )
 
 
+def _generate_machine_report_pdf(
+    db: Session, machine_id: str, prediction: Prediction, report_out: ReportOut
+) -> None:
+    """Machine Report PDF (rancangan.txt Section 7) — dipanggil sekali di
+    akhir _run_report_pipeline, setiap data sensor baru masuk (sesuai
+    permintaan "setiap data databaru masuk maka lsng dibuatkan report").
+    Kegagalan di sini TIDAK boleh menggagalkan pipeline prediksi/report utama
+    — caller membungkus panggilan ini dengan try/except."""
+    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    machine_name = machine.name if machine else "CNC Machine"
+
+    predicted_label = report_out.prediction.predicted_label
+    probability = report_out.prediction.failure_probability
+    operating_status = "Failure" if predicted_label else ("Warning" if probability >= 0.15 else "Normal")
+
+    narrative = generate_machine_report_narrative(
+        machine_name=machine_name,
+        operating_status=operating_status,
+        health_score=report_out.prediction.health_score,
+        failure_risk_pct=round(probability * 100, 1),
+        risk_level=operating_status,
+        top_feature=report_out.shap.features[0].feature_name if report_out.shap.features else "-",
+        root_cause_summary=report_out.cause_analysis_short,
+        recommended_action_summary=(
+            f"{report_out.recommended_action.feature}: {report_out.recommended_action.why}"
+            if report_out.recommended_action
+            else None
+        ),
+    )
+
+    # Condition Log (section 6) — riwayat kondisi mesin ini, dari predictions
+    # terakhir (limit 10 baris terbaru, cukup untuk "periode pengamatan"
+    # tanpa membuat laporan PDF membengkak).
+    history_rows = (
+        db.query(Prediction, SensorReading)
+        .join(SensorReading, Prediction.sensor_reading_id == SensorReading.id)
+        .join(SensorRun, SensorRun.id == SensorReading.run_id)
+        .filter(SensorRun.machine_id == machine_id)
+        .order_by(Prediction.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    condition_log = [
+        ConditionLogRow(
+            timestamp=reading.reading_timestamp.strftime("%d-%m-%Y %H:%M"),
+            air_temperature_k=float(reading.air_temperature_k),
+            process_temperature_k=float(reading.process_temperature_k),
+            rotational_speed_rpm=int(reading.rotational_speed_rpm),
+            tool_wear_min=float(reading.tool_wear_min),
+            health_score=round((1 - float(pred.failure_probability)) * 100, 2),
+            failure_risk_pct=round(float(pred.failure_probability) * 100, 1),
+        )
+        for pred, reading in history_rows
+    ]
+
+    report_date = report_folder.today_utc()
+    report_number = report_folder.next_report_number(db, machine_id, report_date)
+    output_path = report_folder.report_path(machine_id, report_date, report_number)
+
+    render_machine_report_pdf(
+        machine_id=machine_id,
+        machine_name=machine_name,
+        report_number=report_number,
+        report_out=report_out,
+        narrative=narrative,
+        condition_log=condition_log,
+        output_path=output_path,
+    )
+
+    machine_report = MachineReport(
+        machine_id=machine_id,
+        prediction_id=prediction.id,
+        report_number=report_number,
+        file_path=report_folder.relative_path(machine_id, report_date, report_number),
+        operating_status=operating_status,
+    )
+    db.add(machine_report)
+    db.commit()
+
+
 def _run_report_pipeline(
-    db: Session, sensor_reading: SensorReading, pred_result: PredictionResult, machine_id: str
+    db: Session, sensor_reading: SensorReading, pred_result: ClasificationResult, machine_id: str
 ) -> ReportOut:
     """Section 6.11 pipeline penuh: SHAP -> KNN/worst-case-delta -> CRAG RAG (kalau
     predicted failure) -> harga part -> laporan akhir LLM. Disimpan ke predictions,
@@ -114,11 +204,25 @@ def _run_report_pipeline(
     }
 
     # --- 6.6 Prediksi: SUDAH dihitung oleh caller (submit_reading), pakai ulang ---
+    # --- Horizon ("Probability Failure in +10 Minute", rancangan.txt Section 5)
+    # — model TERPISAH, dihitung sekali di sini (bukan oleh caller, karena
+    # tidak dipakai untuk machine_failure/failure_count seperti pred_result
+    # utama). Kegagalan model horizon TIDAK boleh menggagalkan seluruh
+    # pipeline — hasilnya opsional (nullable di DB & schema). ---
+    try:
+        horizon_result = predict_failure_horizon(feature_row)
+    except Exception:
+        logger.exception("_run_report_pipeline: horizon prediction failed")
+        horizon_result = None
+
     prediction = Prediction(
         sensor_reading_id=sensor_reading.id,
         predicted_label=pred_result.label,
         failure_probability=round(pred_result.probability, 4),
         model_version=pred_result.model_version,
+        horizon_predicted_label=horizon_result.label if horizon_result else None,
+        horizon_failure_probability=round(horizon_result.probability, 4) if horizon_result else None,
+        horizon_model_version=horizon_result.model_version if horizon_result else None,
     )
     db.add(prediction)
     db.commit()
@@ -177,6 +281,7 @@ def _run_report_pipeline(
     top_feature_name = shap_result["features"][0]["feature_name"] if shap_result["features"] else "?"
 
     recommended_action_out: RecommendedActionOut | None = None
+    suggestion_general: str | None = None
     suggested_adjustments = wc_delta.get("suggested_adjustments") or {}
     nearest_safe_point = wc_delta.get("nearest_safe_point")
     if suggested_adjustments and nearest_safe_point:
@@ -190,6 +295,11 @@ def _run_report_pipeline(
                 why="",
                 expected_impact="",
             )
+            # "Suggestions for Improvement LLM" (rancangan.txt Section 5) —
+            # arah over/under diturunkan dari TANDA worst_case_delta (target -
+            # current), bukan dinilai oleh LLM.
+            direction = "increase" if suggested_adjustments[top_adjustment_feature] > 0 else "decrease"
+            suggestion_general = generate_suggestion_general(top_adjustment_feature, direction)
 
     narrative = generate_early_warning_narrative(
         EarlyWarningContext(
@@ -208,13 +318,33 @@ def _run_report_pipeline(
     # --- 6.9 / 6.10 RAG + part price (only if predicted failure) ---
     root_cause_out: RootCauseOut | None = None
     part_price_out: list[PartPriceOut] = []
+    cause_analysis_short: str | None = None
 
     if pred_result.label:
         machine_row = db.query(Machine).filter(Machine.id == machine_id).first()
         machine_name = machine_row.name if machine_row else "CNC machine"
 
+        # IQR per RUN ID (rancangan.txt) — menentukan fitur SHAP mana yang
+        # genuinely anomali (bukan cuma paling berkontribusi) untuk query RAG.
+        run_readings = (
+            db.query(SensorReading).filter(SensorReading.run_id == sensor_reading.run_id).all()
+            if sensor_reading.run_id
+            else []
+        )
+        run_bounds = compute_run_iqr_bounds(
+            [
+                {
+                    "air_temperature_k": r.air_temperature_k,
+                    "process_temperature_k": r.process_temperature_k,
+                    "rotational_speed_rpm": r.rotational_speed_rpm,
+                    "tool_wear_min": r.tool_wear_min,
+                }
+                for r in run_readings
+            ]
+        )
+
         top_shap_term, search_queries = generate_search_queries(
-            shap_result, machine_name=machine_name, feature_row=feature_row
+            shap_result, machine_name=machine_name, feature_row=feature_row, run_bounds=run_bounds
         )
         # query_text: representasi ringkas satu-baris (disimpan di RootCauseAnalysis.
         # rag_query untuk ditampilkan di UI/dipakai grading) — search_queries (list)
@@ -225,7 +355,7 @@ def _run_report_pipeline(
         except Exception:
             logger.exception("_run_report_pipeline: CRAG invocation failed")
             crag_state = {
-                "answer": "Analisis root cause tidak dapat dijalankan (RAG service error).",
+                "answer": "Root-cause analysis could not be run (RAG service error).",
                 "used_web_fallback": False,
                 "documents": [],
                 "part_name": None,
@@ -267,16 +397,29 @@ def _run_report_pipeline(
             used_web_fallback=crag_state.get("used_web_fallback", False),
             retrieved_chunk_ids=retrieved_ids,
             retrieved_chunks=retrieved_chunks_out,
+            part_name=crag_state.get("part_name"),
+            part_names=crag_state.get("part_names") or [],
         )
+        cause_analysis_short = summarize_cause_analysis(crag_state["answer"])
 
-        part_name = crag_state.get("part_name")
-        if part_name:
+        # Machine Report REVISI point 6: price EVERY part/consumable the
+        # Handling Procedure named (crag_state["part_names"]), so Estimated
+        # Machine Part Cost has one row per Machine Parts Checking row. The
+        # RAG_ANSWER_PROMPT's PART_NAMES rule requires each entry to already
+        # be a specific, marketplace-searchable name (not a bare generic word
+        # like "filter") — search_part_price's own relevance guard is the
+        # remaining safety net against a loosely-matched listing slipping
+        # through for a still-too-generic name.
+        part_names = crag_state.get("part_names") or []
+        for part_name in part_names:
             try:
                 price_lookups = search_part_price(part_name)
             except Exception:
-                logger.exception("_run_report_pipeline: part price search failed")
+                logger.exception("_run_report_pipeline: part price search failed for %r", part_name)
                 price_lookups = []
-            for lookup in price_lookups:
+            # Keep only the top (first) match per part — the report needs one
+            # representative product/price per part, not every candidate.
+            for lookup in price_lookups[:1]:
                 db.add(
                     PartPriceLookup(
                         prediction_id=prediction.id,
@@ -288,6 +431,7 @@ def _run_report_pipeline(
                     )
                 )
                 part_price_out.append(PartPriceOut(**lookup))
+        if part_names:
             db.commit()
 
     # --- 6.10 step 5: laporan akhir ---
@@ -307,12 +451,14 @@ def _run_report_pipeline(
         llm_model=settings.GROQ_MODEL,
         ai_explanation=narrative["ai_explanation"],
         recommended_action=recommended_action_out.model_dump() if recommended_action_out else None,
+        cause_analysis_short=cause_analysis_short,
+        suggestion_general=suggestion_general,
     )
     db.add(final_report)
     db.commit()
     db.refresh(final_report)
 
-    return ReportOut(
+    report_out = ReportOut(
         sensor=SensorSnapshotOut(
             id=str(sensor_reading.id),
             reading_timestamp=sensor_reading.reading_timestamp,
@@ -325,6 +471,17 @@ def _run_report_pipeline(
             health_score=round((1 - float(prediction.failure_probability)) * 100, 2),
             model_version=prediction.model_version,
             threshold=pred_result.threshold,
+        ),
+        horizon_prediction=(
+            HorizonPredictionOut(
+                predicted_label=horizon_result.label,
+                failure_probability=round(horizon_result.probability, 4),
+                model_version=horizon_result.model_version,
+                threshold=horizon_result.threshold,
+                horizon_minutes=horizon_result.horizon_minutes,
+            )
+            if horizon_result
+            else None
         ),
         shap=ShapExplanationOut(
             base_value=shap_result["base_value"],
@@ -339,10 +496,19 @@ def _run_report_pipeline(
         part_prices=part_price_out,
         ai_explanation=narrative["ai_explanation"],
         recommended_action=recommended_action_out,
+        cause_analysis_short=cause_analysis_short,
+        suggestion_general=suggestion_general,
         final_report_text=report_text,
         llm_model=settings.GROQ_MODEL,
         created_at=final_report.created_at,
     )
+
+    try:
+        _generate_machine_report_pdf(db, machine_id, prediction, report_out)
+    except Exception:
+        logger.exception("_run_report_pipeline: Machine Report PDF generation failed")
+
+    return report_out
 
 
 @router.get("/latest", response_model=ReportOut)
@@ -452,12 +618,15 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
             )
             for cid in chunk_ids
         ]
+        rca_part_names = extract_part_names(rca.rag_answer)
         root_cause_out = RootCauseOut(
             query=rca.rag_query,
             answer=rca.rag_answer,
             used_web_fallback=rca.used_web_fallback,
             retrieved_chunk_ids=chunk_ids,
             retrieved_chunks=retrieved_chunks_out,
+            part_name=rca_part_names[0] if rca_part_names else None,
+            part_names=rca_part_names,
         )
 
     part_price_rows = (
@@ -504,9 +673,23 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
             model_version=prediction.model_version,
             # `threshold` tidak disimpan di tabel predictions (hanya predicted_label
             # /failure_probability/model_version) — diambil dari model bundle yang
-            # di-cache (lru_cache di predictor.py), BUKAN memanggil predict_failure()
-            # lagi. Ini murni baca in-memory cache, jadi tetap cepat.
-            threshold=get_model_bundle().optimal_threshold,
+            # di-cache (lru_cache di predictor_clasification.py), BUKAN memanggil
+            # predict_failure() lagi. Ini murni baca in-memory cache, jadi tetap cepat.
+            threshold=get_clasification_bundle().threshold,
+        ),
+        horizon_prediction=(
+            HorizonPredictionOut(
+                predicted_label=prediction.horizon_predicted_label,
+                failure_probability=float(prediction.horizon_failure_probability),
+                model_version=prediction.horizon_model_version,
+                # threshold/horizon_minutes tidak disimpan per-row (sama untuk
+                # semua prediksi dari model version yang sama) — baca dari
+                # bundle in-memory cache, sama seperti `threshold` di atas.
+                threshold=get_horizon_bundle().threshold,
+                horizon_minutes=get_horizon_bundle().horizon_minutes,
+            )
+            if prediction.horizon_predicted_label is not None
+            else None
         ),
         shap=shap_out,
         recommendations=recommendations_out,
@@ -516,6 +699,8 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
         recommended_action=(
             RecommendedActionOut(**final_report.recommended_action) if final_report.recommended_action else None
         ),
+        cause_analysis_short=final_report.cause_analysis_short,
+        suggestion_general=final_report.suggestion_general,
         final_report_text=final_report.report_text,
         llm_model=final_report.llm_model,
         created_at=final_report.created_at,

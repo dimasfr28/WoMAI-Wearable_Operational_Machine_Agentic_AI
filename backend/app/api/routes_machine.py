@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_role
 from app.db.models import Document, Machine, Prediction, Recommendation, SensorReading, SensorRun, User
 from app.db.session import get_db
-from app.ml.predictor import get_model_bundle
+from app.ml.outlier import RunIqrBounds, compute_run_iqr_bounds, is_value_outlier
+from app.ml.predictor_clasification import PARAM_META as _PARAM_META
 from app.schemas.machine import (
     EarlyWarningOut,
     EarlyWarningPanelOut,
@@ -134,46 +135,38 @@ def delete_machine(
     db.commit()
 
 
-# feature_name (model column, "Air temperature K" dst) -> (parameter key dipakai
-# frontend, label tampilan, satuan)
-_PARAM_META = {
-    "Air temperature K": ("air_temperature_k", "Air Temperature", "K"),
-    "Process temperature K": ("process_temperature_k", "Process Temperature", "K"),
-    "Rotational speed rpm": ("rotational_speed_rpm", "Rotational Speed", "rpm"),
-    "Tool wear min": ("tool_wear_min", "Tool Wear", "min"),
-}
-
-
-def _recommended_action_text(feature_name: str, current_value: float, suggested_delta: float) -> str:
+def _recommended_action_text(
+    feature_name: str, current_value: float, suggested_delta: float, run_bounds: RunIqrBounds
+) -> str:
     """Pesan saran spesifik per parameter — arah (naik/turun) dan nilai target,
     bukan angka delta mentah. `suggested_delta` = target - current (dari KNN
-    worst_case_delta, sudah difilter hanya fitur yang benar-benar beda)."""
+    worst_case_delta, sudah difilter hanya fitur yang benar-benar beda).
+    `run_bounds`: IQR per-RUN-ID (rancangan.txt) — menggantikan bound statis
+    global training yang tidak ada lagi sejak model lama dihapus."""
     target = round(current_value + suggested_delta, 2)
 
-    if feature_name == "Tool wear min":
-        bundle = get_model_bundle()
-        upper = bundle.upper_bound.get("Tool wear min")
-        if upper is not None and current_value > upper:
-            return "Proses terlalu lama — segera hentikan dan ganti/rawat tool sekarang."
+    if feature_name == "tool_wear_min":
+        if is_value_outlier(current_value, run_bounds.tool_wear_min) and suggested_delta < 0:
+            return "Process run time is too long — stop and replace/service the tool now."
         if suggested_delta < 0:
-            return f"Optimal hingga pemakaian {abs(round(suggested_delta))} menit ke depan, lalu jadwalkan penggantian tool."
-        return f"Tool wear saat ini masih di bawah kondisi aman referensi ({target} menit) — lanjutkan monitoring."
+            return f"Safe for {abs(round(suggested_delta))} more minutes of use, then schedule a tool replacement."
+        return f"Tool wear is currently below the reference safe range ({target} minutes) — continue monitoring."
 
-    if feature_name == "Rotational speed rpm":
+    if feature_name == "rpm":
         if suggested_delta > 0:
-            return f"Naikkan kecepatan putar (rotational speed) hingga sekitar {target} rpm."
-        return f"Turunkan kecepatan putar (rotational speed) hingga sekitar {target} rpm."
+            return f"Increase rotational speed to approximately {target} rpm."
+        return f"Decrease rotational speed to approximately {target} rpm."
 
-    if feature_name in ("Air temperature K", "Process temperature K"):
-        label = "suhu udara (air temperature)" if feature_name == "Air temperature K" else "suhu proses (process temperature)"
+    if feature_name in ("air_temp_K", "proc_temp_K"):
+        label = "air temperature" if feature_name == "air_temp_K" else "process temperature"
         if suggested_delta > 0:
-            return f"Naikkan {label} hingga sekitar {target} K."
-        return f"Turunkan {label} hingga sekitar {target} K."
+            return f"Increase {label} to approximately {target} K."
+        return f"Decrease {label} to approximately {target} K."
 
-    return f"Sesuaikan {feature_name} menuju sekitar {target}."
+    return f"Adjust {feature_name} to approximately {target}."
 
 
-def _build_early_warning(db: Session, prediction: Prediction) -> list[EarlyWarningOut]:
+def _build_early_warning(db: Session, prediction: Prediction, run_bounds: RunIqrBounds) -> list[EarlyWarningOut]:
     """AI Early Warning (rancangan.txt Section 9) — kombinasi SHAP + KNN:
     SHAP menentukan seberapa besar kontribusi tiap parameter ke probabilitas
     failure saat ini (dipakai untuk urutan & warna urgensi), KNN
@@ -201,6 +194,15 @@ def _build_early_warning(db: Session, prediction: Prediction) -> list[EarlyWarni
 
     total_abs_shap = sum(abs(float(r.shap_value)) for r in shap_rows) or 1.0
 
+    # feature_name ("air_temp_K" dst) -> atribut RunIqrBounds yang sesuai
+    # (nama field penuh snake_case, lihat app/ml/outlier.py).
+    _bounds_attr = {
+        "air_temp_K": run_bounds.air_temperature_k,
+        "proc_temp_K": run_bounds.process_temperature_k,
+        "rpm": run_bounds.rotational_speed_rpm,
+        "tool_wear_min": run_bounds.tool_wear_min,
+    }
+
     items = []
     for row in shap_rows:
         suggested = adjustments.get(row.feature_name)
@@ -211,17 +213,19 @@ def _build_early_warning(db: Session, prediction: Prediction) -> list[EarlyWarni
 
         param_key, param_label, unit = _PARAM_META.get(row.feature_name, (row.feature_name, row.feature_name, ""))
         contribution_pct = round(abs(float(row.shap_value)) / total_abs_shap * 100, 1)
+        feature_value = float(row.feature_value)
 
         items.append(
             EarlyWarningOut(
-                title=f"{param_label} mendekati/melewati ambang wajar",
+                title=f"{param_label} approaching/exceeding normal range",
                 parameter=param_key,
                 parameter_label=param_label,
                 unit=unit,
-                current_value=float(row.feature_value),
+                current_value=feature_value,
                 suggested_adjustment=float(suggested),
                 shap_contribution_pct=contribution_pct,
-                recommended_action=_recommended_action_text(row.feature_name, float(row.feature_value), float(suggested)),
+                recommended_action=_recommended_action_text(row.feature_name, feature_value, float(suggested), run_bounds),
+                is_anomaly=is_value_outlier(feature_value, _bounds_attr.get(row.feature_name)),
             )
         )
 
@@ -287,7 +291,25 @@ def get_machine_status(machine_id: str, db: Session = Depends(get_db), user: Use
         agree = sum(1 for label in labels if label == latest_prediction.predicted_label)
         stability_pct = round(agree / len(labels) * 100, 1)
 
-    early_warning_items = _build_early_warning(db, latest_prediction) if latest_prediction is not None else []
+    early_warning_items = []
+    if latest_prediction is not None and latest_reading.run_id is not None:
+        run_readings = (
+            db.query(SensorReading)
+            .filter(SensorReading.run_id == latest_reading.run_id)
+            .all()
+        )
+        run_bounds = compute_run_iqr_bounds(
+            [
+                {
+                    "air_temperature_k": r.air_temperature_k,
+                    "process_temperature_k": r.process_temperature_k,
+                    "rotational_speed_rpm": r.rotational_speed_rpm,
+                    "tool_wear_min": r.tool_wear_min,
+                }
+                for r in run_readings
+            ]
+        )
+        early_warning_items = _build_early_warning(db, latest_prediction, run_bounds)
 
     return MachineStatusOut(
         operational_status=operational_status,

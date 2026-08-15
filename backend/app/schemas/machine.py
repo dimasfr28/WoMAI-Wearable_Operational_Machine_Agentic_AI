@@ -38,6 +38,10 @@ class EarlyWarningOut(BaseModel):
     suggested_adjustment: float | None
     shap_contribution_pct: float  # this feature's share of total |SHAP| across all 4 features (0-100) — drives urgency color
     recommended_action: str
+    # IQR outlier check per RUN ID (rancangan.txt) — true = current_value falls
+    # outside this run's own Tukey bounds; drives the red-shadow highlight on
+    # the frontend card.
+    is_anomaly: bool
 
 
 class EarlyWarningPanelOut(BaseModel):

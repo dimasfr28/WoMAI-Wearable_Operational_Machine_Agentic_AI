@@ -32,7 +32,7 @@ from app.api.routes_sensor import _bump_failure_count_if_needed, assign_run_id
 from app.db.models import ChatMessage, ChatSession, Machine, Prediction, SensorReading, SensorRun, Sop, User
 from app.db.session import SessionLocal
 from app.llm.groq_client import chat, chat_json
-from app.ml.predictor import RAW_TO_MODEL_COL, PredictionResult, predict_failure
+from app.ml.predictor_clasification import RAW_TO_MODEL_COL, ClasificationResult, predict_failure
 from app.ml.shap_tool import explain_failure_shap
 from app.rag.final_report import WhatIfContext, generate_what_if_narrative
 from app.schemas.chat import ChatIn
@@ -292,7 +292,7 @@ def _run_latest_report(db: Session, intent_data: dict, sops: list[Sop]):
     yield {"type": "text", "delta": report.final_report_text}
 
 
-def _hypothetical_prediction_event_data(result: PredictionResult) -> dict:
+def _hypothetical_prediction_event_data(result: ClasificationResult) -> dict:
     return {
         "label": result.label,
         "probability": result.probability,
@@ -444,6 +444,14 @@ def chat_endpoint(payload: ChatIn, user: User = Depends(get_current_user)):
             sops = db.query(Sop).order_by(Sop.created_at.asc()).all()
             intent_data = _classify_intent(payload.message, machines)
             intent = intent_data["intent"]
+
+            # rancangan.txt Section 8: mesin aktif dipilih SEBELUM masuk chat
+            # (frontend kirim payload.machine_id dari state global), jadi
+            # TIDAK perlu lagi diekstrak dari teks pesan atau ditanyakan lewat
+            # needs_input — payload.machine_id selalu menang atas hasil
+            # _classify_intent's LLM-guessed machine_id ketika ada.
+            if payload.machine_id:
+                intent_data["machine_id"] = payload.machine_id
 
             if intent == "predict":
                 generator = _run_predict(db, user, intent_data, sops)

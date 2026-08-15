@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Machine Condition Report {{ machine_name }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 2cm 1.8cm;
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #888;
+    }
+  }
+  body {
+    font-family: "DejaVu Sans", Arial, sans-serif;
+    font-size: 10.5pt;
+    color: #1a1a1a;
+    line-height: 1.5;
+  }
+  h1 { font-size: 18pt; margin-bottom: 2px; }
+  h2 { font-size: 13pt; margin-top: 22px; margin-bottom: 6px; border-bottom: 1.5pt solid #333; padding-bottom: 3px; }
+  h3 { font-size: 11pt; margin-top: 14px; margin-bottom: 4px; color: #333; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
+  /* Prevents WeasyPrint from splitting a row's cells across a page break
+     (the bug this fixes: a row landing on a page boundary rendered with
+     some cells silently missing, since only part of the row fit). */
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  thead { display: table-header-group; }
+  th, td { border: 0.75pt solid #ccc; padding: 5px 8px; text-align: left; font-size: 9.5pt; }
+  th { background: #f0f0f0; font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  th.link-col, td.link-col { width: 90px; white-space: nowrap; }
+  .meta-table td:first-child { font-weight: 600; width: 35%; color: #444; }
+  .meta-table, .meta-table td { border: none; padding: 2px 0; }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 9pt;
+    font-weight: 600;
+    color: white;
+  }
+  .badge-normal { background: #1e8e3e; }
+  .badge-warning { background: #e8710a; }
+  .badge-failure { background: #d33; }
+  .prose { margin: 6px 0; }
+  hr { border: none; border-top: 0.75pt solid #ccc; margin: 18px 0; }
+  .footer { margin-top: 30px; font-size: 9pt; color: #777; text-align: center; }
+  .footer .brand { font-weight: 600; color: #333; }
+</style>
+</head>
+<body>
+
+<h1>MACHINE CONDITION REPORT — {{ machine_name | upper }}</h1>
+
+<h2>Report Information</h2>
+<table class="meta-table">
+  <tr><td>Report Date</td><td>{{ report_datetime }}</td></tr>
+  <tr><td>Report No.</td><td>{{ report_number }}</td></tr>
+  <tr><td>Machine ID</td><td>{{ machine_id }}</td></tr>
+  <tr><td>Machine Name</td><td>{{ machine_name }}</td></tr>
+  <tr><td>Operating Status</td><td>
+    <span class="badge {% if operating_status == 'Failure' %}badge-failure{% elif operating_status == 'Warning' %}badge-warning{% else %}badge-normal{% endif %}">
+      {{ operating_status }}
+    </span>
+  </td></tr>
+</table>
+
+<hr>
+
+<h2>1. Average Machine Condition</h2>
+<p class="prose">This section provides a snapshot of the machine's condition at the time this report was generated.</p>
+<table>
+  <tr><th>Parameter</th><th class="num">Value</th></tr>
+  <tr><td>Air Temperature</td><td class="num">{{ sensor.air_temperature_k }} K</td></tr>
+  <tr><td>Process Temperature</td><td class="num">{{ sensor.process_temperature_k }} K</td></tr>
+  <tr><td>Rotational Speed</td><td class="num">{{ sensor.rotational_speed_rpm }} RPM</td></tr>
+  <tr><td>Machine Operating Time (Tool Wear)</td><td class="num">{{ sensor.tool_wear_min }} Minute</td></tr>
+  <tr><td>Health Score</td><td class="num">{{ prediction.health_score }}/100</td></tr>
+  <tr><td>Failure Probability in +{{ horizon_minutes }} Minute</td><td class="num">{% if horizon_pct is not none %}{{ horizon_pct }}%{% else %}N/A{% endif %}</td></tr>
+</table>
+
+<h3>AI Condition Summary</h3>
+<p class="prose">{{ narrative.condition_summary }}</p>
+
+<hr>
+
+<h2>2. Failure Risk Prediction</h2>
+<h3>Prediction Result</h3>
+<table class="meta-table">
+  <tr><td>Failure Risk</td><td>{{ failure_risk_pct }}%</td></tr>
+  <tr><td>Risk Level</td><td>{{ risk_level }}</td></tr>
+</table>
+
+<h3>Top Contributing Factor</h3>
+<p class="prose">{{ top_feature_label }}</p>
+
+<h3>Feature Contribution</h3>
+<table>
+  <tr><th>Feature</th><th class="num">Failure Contribution</th><th>Interpretation</th></tr>
+  {% for f in shap_features %}
+  <tr><td>{{ f.label }}</td><td class="num">{{ f.contribution_score }}/100</td><td>{{ f.interpretation }}</td></tr>
+  {% endfor %}
+</table>
+
+<h3>AI Diagnosis</h3>
+<p class="prose">{{ narrative.ai_diagnosis }}</p>
+
+<h3>Machine Parts Checking</h3>
+{% if parts_checking %}
+<table>
+  <tr><th>Component / Part</th><th>Condition</th><th>Finding</th></tr>
+  {% for part in parts_checking %}
+  <tr><td>{{ part.name }}</td><td>{{ part.condition }}</td><td>{{ part.finding }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="prose">No specific part was identified as problematic in this report.</p>
+{% endif %}
+
+<hr>
+
+<h2>3. Handling in Accordance with Standard Operating Procedures</h2>
+<p class="prose">This section contains recommended actions based on the manual, SOP, or troubleshooting guide.</p>
+{% if root_cause %}
+<h3>What Is the Problem</h3>
+<p class="prose">{{ root_cause.what_is_the_problem | safe if root_cause.what_is_the_problem else "Not available." }}</p>
+<h3>Handling Procedure</h3>
+<p class="prose">{{ root_cause.handling_procedure | safe if root_cause.handling_procedure else "Not available." }}</p>
+<h3>Affected Part / Component</h3>
+<p class="prose">{{ root_cause.affected_part | safe if root_cause.affected_part else "Not available." }}</p>
+{% else %}
+<p class="prose">No root-cause analysis for this report (normal machine condition, RAG was not run).</p>
+{% endif %}
+
+<hr>
+
+<h2>4. Estimated Machine Part Cost</h2>
+<p class="prose">This section provides a cost estimate for components that may be needed.</p>
+{% if part_prices %}
+<table>
+  <tr><th>Part Name</th><th class="num">Estimated Price Range</th><th class="link-col">Link</th></tr>
+  {% for p in part_prices %}
+  <tr>
+    <td>{{ p.part_name }}</td>
+    <td class="num">{{ p.price_text }}</td>
+    <td class="link-col">{% if p.source_url %}<a href="{{ p.source_url }}">View Product</a>{% else %}-{% endif %}</td>
+  </tr>
+  {% endfor %}
+  {% if total_cost_text %}
+  <tr><td><strong>Total Estimated Cost</strong></td><td class="num"><strong>{{ total_cost_text }}</strong></td><td class="link-col"></td></tr>
+  {% endif %}
+</table>
+{% else %}
+<p class="prose">No e-commerce part price data is available for this report yet.</p>
+{% endif %}
+
+<hr>
+
+<h2>5. Machine Condition Log</h2>
+<p class="prose">This section contains the machine's condition history over the observed period.</p>
+<table>
+  <thead>
+    <tr><th>No.</th><th>Timestamp</th><th class="num">Air Temp</th><th class="num">Process Temp</th><th class="num">Rotational Speed</th><th class="num">Tool Wear</th><th class="num">Health Score</th><th class="num">Failure Risk</th></tr>
+  </thead>
+  <tbody>
+    {% for log in condition_log %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ log.timestamp }}</td>
+      <td class="num">{{ log.air_temperature_k }} K</td>
+      <td class="num">{{ log.process_temperature_k }} K</td>
+      <td class="num">{{ log.rotational_speed_rpm }} RPM</td>
+      <td class="num">{{ log.tool_wear_min }} min</td>
+      <td class="num">{{ log.health_score }}</td>
+      <td class="num">{{ log.failure_risk_pct }}%</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<hr>
+
+<h2>6. Summary</h2>
+{% for paragraph in narrative.summary.split("\n\n") %}
+<p class="prose">{{ paragraph }}</p>
+{% endfor %}
+
+<div class="footer">
+  <p class="brand">CNC AI Copilot</p>
+  <p>AI Predictive Maintenance &amp; Decision Support System</p>
+  <p>Generated at: {{ report_datetime }}</p>
+</div>
+
+</body>
+</html>

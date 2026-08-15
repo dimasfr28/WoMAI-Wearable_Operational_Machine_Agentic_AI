@@ -1,4 +1,34 @@
 services:
+  # Internal-only (no Traefik labels, not on dokploy-network) — only `backend`
+  # talks to these, over the default network. Same split rationale as
+  # dev.compose.yaml: keeps backend rebuilds from invalidating these images'
+  # multi-hundred-MB model download layers.
+  mineru-service:
+    build:
+      context: ./mineru-service
+      dockerfile: Dockerfile.prod
+    volumes:
+      - mineru_cache:/app/.cache
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+
+  embedding-service:
+    build:
+      context: ./embedding-service
+      dockerfile: Dockerfile.prod
+    volumes:
+      - embedding_cache:/app/.cache
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
   backend:
     build:
       context: ./backend
@@ -7,6 +37,7 @@ services:
     volumes:
       - backend_saved:/app/saved
       - pdf_library:/data/pdf_library
+      - machine_reports:/app/reports
     # Alibaba part-price scraping runs Chromium via Playwright IN-PROCESS
     # (backend/app/rag/part_price_search.py) — SYS_ADMIN capability needed for
     # Chromium's sandbox to work inside a container without --no-sandbox.
@@ -14,6 +45,10 @@ services:
       - SYS_ADMIN
     depends_on:
       postgres:
+        condition: service_healthy
+      mineru-service:
+        condition: service_healthy
+      embedding-service:
         condition: service_healthy
     networks:
       - default
@@ -50,3 +85,6 @@ networks:
 volumes:
   backend_saved:
   pdf_library:
+  machine_reports:
+  mineru_cache:
+  embedding_cache:

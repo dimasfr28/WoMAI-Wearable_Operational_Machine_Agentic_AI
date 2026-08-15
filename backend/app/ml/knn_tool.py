@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
-from app.ml.predictor import RAW_TO_MODEL_COL
+from app.ml.predictor_clasification import RAW_TO_MODEL_COL
 
 FEATURE_ORDER = ["air_temperature_k", "process_temperature_k", "rotational_speed_rpm", "tool_wear_min"]
 
