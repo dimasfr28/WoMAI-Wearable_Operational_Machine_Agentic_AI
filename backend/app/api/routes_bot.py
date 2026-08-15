@@ -263,6 +263,7 @@ def delete_bot_session(
             status_code=status.HTTP_404_NOT_FOUND, detail="Bot session not found"
         )
 
+    db.query(BotMessage).filter(BotMessage.session_id == session.id).delete()
     db.delete(session)
     db.commit()
     return {"status": "ok", "message": "Bot session deleted successfully"}
