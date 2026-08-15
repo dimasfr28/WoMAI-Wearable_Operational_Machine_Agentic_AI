@@ -17,7 +17,7 @@ from app.schemas.bot import BotIn, BotMessageOut, BotSessionDetailOut, BotSessio
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/bot", tags=["bot"])
+router = APIRouter(prefix="/bot", tags=["chat"])
 
 
 def _sse(event: dict) -> str:
