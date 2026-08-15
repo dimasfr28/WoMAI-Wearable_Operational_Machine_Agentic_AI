@@ -103,6 +103,8 @@ def resolve_machine_node(state: BotGraphState, db: Session | None = None) -> Bot
         raw = chat_json(messages)
         parsed = json.loads(raw)
         resolved_id = parsed.get("resolved_machine_id")
+        if isinstance(resolved_id, str) and resolved_id.strip().lower() in ("null", "none", ""):
+            resolved_id = None
         is_ambiguous = bool(parsed.get("is_ambiguous"))
         clarification_msg = parsed.get("clarification_message")
 
@@ -115,6 +117,8 @@ def resolve_machine_node(state: BotGraphState, db: Session | None = None) -> Bot
             }
 
         valid_id = str(resolved_id).strip() if resolved_id else session_machine_id
+        if isinstance(valid_id, str) and valid_id.strip().lower() in ("null", "none", ""):
+            valid_id = None
         return {
             **state,
             "resolved_machine_id": valid_id,

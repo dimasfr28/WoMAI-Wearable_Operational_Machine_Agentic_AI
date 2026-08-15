@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes_auth import router as auth_router
+from app.api.routes_bot import router as bot_router
 from app.api.routes_chat import router as chat_router
 from app.api.routes_knowledgebase import router as knowledgebase_router
 from app.api.routes_machine import router as machine_router
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(bot_router)
 app.include_router(machine_router)
 app.include_router(knowledgebase_router)
 app.include_router(sensor_router)
