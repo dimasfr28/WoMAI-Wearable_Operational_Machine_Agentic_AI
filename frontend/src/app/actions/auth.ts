@@ -11,7 +11,12 @@ export interface AuthActionState {
 
 function safeNext(raw: FormDataEntryValue | null): string {
   const value = typeof raw === "string" ? raw : "";
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/chat";
+  // Default setelah login: /mesin, bukan /chat — user wajib memilih mesin
+  // dulu (rancangan.txt Section 2) sebelum mengakses fitur lain. `next` dari
+  // middleware's redirect (mis. ?next=/machine-report) tetap dihormati kalau
+  // ada, supaya deep-link yang sempat ditolak middleware balik ke tujuan asal
+  // setelah login — bukan dipaksa ke /mesin lagi.
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/mesin";
 }
 
 export async function loginAction(

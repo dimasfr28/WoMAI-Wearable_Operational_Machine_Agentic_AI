@@ -1,0 +1,32 @@
+FROM python:3.11-slim
+
+# Host has no working IPv6 route AND TCP port 53 (DNS-over-TCP) is blocked on this
+# network. See backend/Dockerfile.dev for the full explanation — same fix needed
+# here since this image also downloads the embedding model over the network.
+ENV RES_OPTIONS="no-aaaa"
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/app/.cache/huggingface \
+    EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# hf-xet (huggingface_hub's newer "xet-bridge" transfer protocol) hangs/stalls
+# indefinitely downloading model files on this network — only *uninstalling* it
+# forces the correct plain-HTTP fallback. Same fix as backend/Dockerfile.dev.
+RUN pip uninstall -y hf-xet
+
+# Pre-download the embedding model at build time so the container starts ready
+# to serve immediately instead of blocking the first request on a model
+# download (same rationale as mineru-service's build-time predownload).
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
+
+COPY main.py .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

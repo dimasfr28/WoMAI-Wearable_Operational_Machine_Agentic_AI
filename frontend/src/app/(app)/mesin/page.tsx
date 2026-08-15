@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Factory, MessageSquareText, Pencil, Trash2 } from "lucide-react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MachineFormDialog } from "@/components/machine-form-dialog";
 import { useMachines } from "@/hooks/use-machines";
+import { useActiveMachine } from "@/hooks/use-active-machine";
 import { useSessions } from "@/hooks/use-sessions";
 import { deleteMachine } from "@/lib/machines";
 import type { Machine } from "@/lib/types";
@@ -29,16 +31,29 @@ import { cn } from "@/lib/utils";
 
 export default function MesinPage() {
   const { machines } = useMachines();
+  const { setActiveMachine } = useActiveMachine();
   const { sessions } = useSessions();
+  const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
   const [editMachine, setEditMachine] = useState<Machine | undefined>(
     undefined,
   );
 
+  function selectMachine(m: Machine) {
+    setActiveMachine(m);
+    router.push("/machine-diagnosis");
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto p-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">Mesin</h1>
+        <div>
+          <h1 className="text-xl font-semibold">Pilih Mesin</h1>
+          <p className="text-sm text-muted-foreground">
+            Pilih mesin untuk memulai Machine Diagnosis, atau kelola daftar
+            mesin di bawah.
+          </p>
+        </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
           Tambah Mesin
         </Button>
@@ -66,7 +81,11 @@ export default function MesinPage() {
             )?.lastPrediction;
 
             return (
-              <Card key={m.id} className="py-0">
+              <Card
+                key={m.id}
+                className="cursor-pointer py-0 transition-colors hover:border-primary/50"
+                onClick={() => selectMachine(m)}
+              >
                 <CardContent className="flex flex-col gap-3 p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -77,7 +96,10 @@ export default function MesinPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div
+                      className="flex shrink-0 items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Badge variant="secondary">{m.status}</Badge>
                       <Button
                         variant="ghost"
@@ -146,6 +168,7 @@ export default function MesinPage() {
                     {sessionCount > 0 && (
                       <Link
                         href={`/riwayat?mesin=${m.id}`}
+                        onClick={(e) => e.stopPropagation()}
                         className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                       >
                         <MessageSquareText className="size-3.5" />
@@ -163,7 +186,7 @@ export default function MesinPage() {
       <MachineFormDialog
         open={addOpen}
         onOpenChange={setAddOpen}
-        onSaved={() => {}}
+        onSaved={(m) => selectMachine(m)}
       />
       <MachineFormDialog
         open={editMachine !== undefined}

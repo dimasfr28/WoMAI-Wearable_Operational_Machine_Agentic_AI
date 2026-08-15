@@ -1,0 +1,13 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
+fastapi==0.121.3
+uvicorn[standard]==0.30.6
+
+# CPU-only wheel — this container has no GPU. sentence-transformers 3.3.1's own
+# floor is lower than 2.6.0 (that floor came from mineru[pipeline] in the old
+# combined backend image, not from sentence-transformers itself — see
+# backend/requirements.txt's comment history); pinned to a recent CPU wheel here
+# since this image no longer shares a torch pin with mineru.
+torch==2.6.0+cpu
+sentence-transformers==3.3.1

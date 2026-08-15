@@ -21,36 +21,43 @@ class FinalReportContext:
     part_price: list = field(default_factory=list)
 
 
-FINAL_REPORT_PROMPT = """Anda adalah asisten predictive maintenance untuk mesin CNC Haas.
-Susun laporan ringkas dalam Bahasa Indonesia (format markdown) untuk engineer, berdasarkan
-data berikut:
+FINAL_REPORT_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+Write a concise report in English (markdown format) for an engineer, based on the data below.
 
-## Hasil Prediksi
+## Prediction Result
 {prediction}
 
-## Fitur Paling Berpengaruh (SHAP)
+## Top Contributing Features (SHAP)
 {shap_top_features}
 
-## Saran Penyesuaian (Worst-Case Delta)
+## Suggested Adjustment (Worst-Case Delta)
 {worst_case_delta}
 
-## Kasus Serupa (KNN)
+## Similar Cases (KNN)
 {similar_cases}
 
-## Analisis Root Cause
+## Root Cause Analysis
 {root_cause}
 
-## Estimasi Harga Part (hasil pencarian di platform e-commerce: Shopee/Tokopedia/Lazada/Alibaba/dll)
+## Estimated Part Cost (from e-commerce search: Shopee/Tokopedia/Lazada/Alibaba/etc.)
 {part_price}
 
-Buat laporan singkat (maks 300 kata) dengan struktur:
-1. Ringkasan kondisi & risiko
-2. Faktor utama penyebab risiko
-3. Rekomendasi tindakan konkret
-4. Estimasi biaya — HANYA gunakan angka dari data "Estimasi Harga Part" di atas (hasil
-   pencarian e-commerce), JANGAN mengarang atau menyebut harga dari sumber lain (manual
-   servis, forum, dll). Kalau data kosong/tidak ada harga ditemukan, katakan dengan jelas
-   bahwa harga belum tersedia dari platform e-commerce dan sarankan pengecekan manual.
+Write a short report (max 300 words) with this structure:
+1. Condition & risk summary
+2. Main factors driving the risk
+3. Concrete recommended actions
+4. Cost estimate — use ONLY the figures from the "Estimated Part Cost" data above (e-commerce
+   search results); do not invent or cite prices from any other source (service manual, forum,
+   etc.). If that data is empty/no price was found, state plainly that no e-commerce price is
+   available yet and recommend a manual check.
+
+CITATION RULE: if "Root Cause Analysis" above contains citations in "(Source Name)" format,
+preserve them when you restate a cited claim — do not drop or paraphrase away a citation, and
+do not invent a citation that was not present in the source data.
+
+DIRECTNESS RULE: write direct, definitive statements grounded in the data above. Do not hedge
+with vague filler words such as "maybe", "perhaps", "possibly", "it seems", or "it might be" —
+state what the data supports plainly.
 """
 
 
@@ -60,16 +67,16 @@ def generate_final_report(context: FinalReportContext) -> str:
         shap_top_features=context.shap_top_features,
         worst_case_delta=context.worst_case_delta,
         similar_cases=context.similar_cases,
-        root_cause=context.root_cause_answer or "(tidak dijalankan — prediksi tidak menunjukkan failure)",
-        part_price=context.part_price or "(tidak ada data harga part)",
+        root_cause=context.root_cause_answer or "(not run — prediction did not indicate a failure)",
+        part_price=context.part_price or "(no part price data)",
     )
     try:
         return chat([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL, temperature=0.3)
     except Exception:
         logger.exception("generate_final_report: Groq call failed")
         return (
-            "**Laporan otomatis tidak dapat dibuat** (layanan LLM tidak tersedia saat ini). "
-            "Data prediksi, SHAP, dan rekomendasi tetap tersedia di atas untuk ditinjau manual."
+            "**Automatic report generation is unavailable** (LLM service unreachable right now). "
+            "Prediction, SHAP, and recommendation data are still available above for manual review."
         )
 
 
@@ -89,31 +96,34 @@ class EarlyWarningContext:
     recommended_target: float | None
 
 
-EARLY_WARNING_PROMPT = """Anda adalah asisten predictive maintenance untuk mesin CNC Haas.
-Balas HANYA JSON dengan skema persis ini (tanpa teks lain):
+EARLY_WARNING_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+Reply ONLY in JSON with exactly this schema (no other text):
 {{
-  "ai_explanation": "<1-2 kalimat Bahasa Indonesia menjelaskan mengapa prediksi ini terjadi, sebutkan fitur paling berpengaruh>",
-  "why": "<1 kalimat Bahasa Indonesia menjelaskan mengapa penyesuaian yang disarankan akan membantu, atau string kosong kalau tidak ada rekomendasi>",
-  "expected_impact": "<1 kalimat singkat Bahasa Indonesia dampak yang diharapkan dari penyesuaian, atau string kosong kalau tidak ada rekomendasi>"
+  "ai_explanation": "<1-2 sentences in English explaining why this prediction occurred, naming the top contributing feature>",
+  "why": "<1 sentence in English explaining why the suggested adjustment would help, or an empty string if there is no recommendation>",
+  "expected_impact": "<1 short sentence in English on the expected impact of the adjustment, or an empty string if there is no recommendation>"
 }}
 
+Write direct, definitive statements grounded in the data below. Do not hedge with vague filler
+words such as "maybe", "perhaps", "possibly", "it seems", or "it might be".
+
 Data:
-- Prediksi: {label_text} (probabilitas kegagalan {probability_pct}%)
-- Fitur paling berpengaruh: {top_feature}
-- Rekomendasi penyesuaian: {recommendation_text}
+- Prediction: {label_text} (failure probability {probability_pct}%)
+- Top contributing feature: {top_feature}
+- Suggested adjustment: {recommendation_text}
 """
 
 
 def generate_early_warning_narrative(context: EarlyWarningContext) -> dict:
-    label_text = "Kegagalan diprediksi" if context.predicted_label else "Kondisi normal, tidak ada kegagalan diprediksi"
+    label_text = "Failure predicted" if context.predicted_label else "Normal condition, no failure predicted"
     probability_pct = round(context.probability * 100, 1)
     if context.recommended_feature is not None:
         recommendation_text = (
-            f"{context.recommended_feature}: dari {context.recommended_current} "
-            f"menuju {context.recommended_target}"
+            f"{context.recommended_feature}: from {context.recommended_current} "
+            f"to {context.recommended_target}"
         )
     else:
-        recommendation_text = "(tidak ada rekomendasi — data historis belum cukup)"
+        recommendation_text = "(no recommendation — not enough historical data yet)"
 
     prompt = EARLY_WARNING_PROMPT.format(
         label_text=label_text,
@@ -132,10 +142,48 @@ def generate_early_warning_narrative(context: EarlyWarningContext) -> dict:
     except Exception:
         logger.exception("generate_early_warning_narrative: Groq call failed")
         return {
-            "ai_explanation": f"{context.top_feature_name} adalah faktor paling berpengaruh terhadap prediksi ini.",
+            "ai_explanation": f"{context.top_feature_name} is the top contributing factor to this prediction.",
             "why": "",
             "expected_impact": "",
         }
+
+
+SUGGESTION_GENERAL_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+Turn the technical condition below into ONE concise, actionable suggestion sentence in English,
+WITHOUT stating raw numeric sensor values (e.g. do NOT write "313.5 K" or "230 minutes") — use a
+GENERAL term for the variable (e.g. "heat", "rotational speed", "tool wear/operating time"), and
+state the direction clearly (increase or decrease).
+
+Write a direct, definitive statement. Do not hedge with vague filler words such as "maybe",
+"perhaps", "possibly", or "it might help".
+
+Variable to adjust: {general_term}
+Adjustment direction: {direction}
+
+Reply with ONLY the one-sentence suggestion, no additional explanation.
+"""
+
+
+def generate_suggestion_general(feature_name: str, direction: str) -> str:
+    """"Suggestions for Improvement LLM" (rancangan.txt Section 5, "AI
+    Explanation" panel) — mengadaptasi pola query-generation
+    (generate_search_queries() di crag_graph.py, yang juga menerjemahkan
+    fitur mentah jadi istilah general via LLM) untuk membuat kalimat saran,
+    bukan query pencarian. `feature_name`: nama kolom model (mis.
+    "tool_wear_min", lihat predictor_clasification.py's RAW_TO_MODEL_COL).
+    `direction`: "increase"/"decrease", diturunkan dari tanda worst_case_delta
+    (KNN) oleh caller — LLM TIDAK menilai sendiri arah over/under, hanya
+    menuliskannya jadi kalimat."""
+    from app.rag.crag_graph import _SHAP_FEATURE_TO_GENERAL_TERM
+
+    general_term = _SHAP_FEATURE_TO_GENERAL_TERM.get(feature_name, feature_name)
+    prompt = SUGGESTION_GENERAL_PROMPT.format(general_term=general_term, direction=direction)
+    try:
+        return chat([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL, temperature=0.2).strip()
+    except Exception:
+        logger.exception("generate_suggestion_general: Groq call failed")
+        verb = "Increase" if direction == "increase" else "Decrease"
+        return f"{verb} {general_term} toward a safer operating condition."
 
 
 @dataclass
@@ -154,29 +202,33 @@ class WhatIfContext:
     changed_features: dict[str, float]
 
 
-WHAT_IF_PROMPT = """Anda adalah asisten predictive maintenance untuk mesin CNC Haas.
-Bandingkan skenario hipotetis (what-if) berikut dengan kondisi nyata mesin {machine_name} saat ini.
-Balas dalam Bahasa Indonesia, 2-4 kalimat, sebutkan angka probabilitas kegagalan dari kedua kondisi
-dan apakah risikonya naik/turun/tetap. JANGAN mengarang data yang tidak ada di bawah.
+WHAT_IF_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+Compare the following hypothetical (what-if) scenario against the real current condition of
+machine {machine_name}. Reply in English, 2-4 sentences, stating the failure probability of both
+conditions and whether the risk increases, decreases, or stays the same. Do NOT invent any data
+not given below.
 
-Kondisi nyata terakhir: {baseline_text}
-Skenario hipotetis: {hypothetical_label_text} (probabilitas kegagalan {hypothetical_probability_pct}%)
-Perubahan yang disimulasikan: {changes_text}
-Fitur paling berpengaruh pada skenario hipotetis: {top_feature}
+Write direct, definitive statements. Do not hedge with vague filler words such as "maybe",
+"perhaps", "possibly", or "it seems".
+
+Last real condition: {baseline_text}
+Hypothetical scenario: {hypothetical_label_text} (failure probability {hypothetical_probability_pct}%)
+Simulated changes: {changes_text}
+Top contributing feature in the hypothetical scenario: {top_feature}
 """
 
 
 def generate_what_if_narrative(context: WhatIfContext) -> str:
     if context.baseline_probability is not None:
-        baseline_label_text = "kegagalan diprediksi" if context.baseline_label else "normal"
-        baseline_text = f"{baseline_label_text} (probabilitas kegagalan {round(context.baseline_probability * 100, 1)}%)"
+        baseline_label_text = "failure predicted" if context.baseline_label else "normal"
+        baseline_text = f"{baseline_label_text} (failure probability {round(context.baseline_probability * 100, 1)}%)"
     else:
-        baseline_text = "(belum ada data sensor sungguhan untuk mesin ini)"
+        baseline_text = "(no real sensor data yet for this machine)"
 
-    hypothetical_label_text = "kegagalan diprediksi" if context.hypothetical_label else "normal"
+    hypothetical_label_text = "failure predicted" if context.hypothetical_label else "normal"
     changes_text = (
-        "; ".join(f"{k} menjadi {v}" for k, v in context.changed_features.items())
-        or "(tidak ada, memakai data sungguhan terakhir apa adanya)"
+        "; ".join(f"{k} set to {v}" for k, v in context.changed_features.items())
+        or "(none — using the latest real data as-is)"
     )
 
     prompt = WHAT_IF_PROMPT.format(
@@ -193,16 +245,16 @@ def generate_what_if_narrative(context: WhatIfContext) -> str:
         logger.exception("generate_what_if_narrative: Groq call failed")
         if context.baseline_probability is not None:
             direction = (
-                "naik" if context.hypothetical_probability > context.baseline_probability
-                else "turun" if context.hypothetical_probability < context.baseline_probability
-                else "tetap"
+                "increases" if context.hypothetical_probability > context.baseline_probability
+                else "decreases" if context.hypothetical_probability < context.baseline_probability
+                else "stays the same"
             )
             return (
-                f"Skenario hipotetis: probabilitas kegagalan {direction} dari "
-                f"{round(context.baseline_probability * 100, 1)}% menjadi "
+                f"Hypothetical scenario: failure probability {direction} from "
+                f"{round(context.baseline_probability * 100, 1)}% to "
                 f"{round(context.hypothetical_probability * 100, 1)}%."
             )
         return (
-            f"Skenario hipotetis: probabilitas kegagalan {round(context.hypothetical_probability * 100, 1)}% "
-            "(belum ada data sungguhan mesin ini untuk dibandingkan)."
+            f"Hypothetical scenario: failure probability {round(context.hypothetical_probability * 100, 1)}% "
+            "(no real data for this machine yet to compare against)."
         )

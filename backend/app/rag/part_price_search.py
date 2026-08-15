@@ -275,12 +275,48 @@ def search_part_price(part_name: str, machine_type: str = "Haas CNC", max_candid
     return lookups
 
 
+_RELEVANCE_STOPWORDS = {
+    "cnc", "machine", "haas", "for", "the", "a", "an", "and", "or", "of", "with", "system",
+    "part", "parts", "kit", "tool", "industrial", "machinery",
+}
+
+
+def _relevance_keywords(text: str) -> set[str]:
+    """Meaningful (non-stopword, length > 2) lowercase words from a query or
+    product title — used by _is_relevant_product to reject listings that
+    share nothing but generic CNC/machine boilerplate with the search term
+    (e.g. searching "grease filter" must not accept a "Range Hood Grease
+    Filter" or "DJI Lens Filter" listing just because both say "filter")."""
+    words = re.findall(r"[a-zA-Z0-9]+", text.lower())
+    return {w for w in words if len(w) > 2 and w not in _RELEVANCE_STOPWORDS}
+
+
+def _is_relevant_product(query: str, product_name: str) -> bool:
+    """Cheap relevance guard on top of Alibaba's own (loose) search matching
+    — rejects a product card that shares NO meaningful keyword at all with
+    the part name being searched (e.g. searching "ballscrew" matching a
+    drone camera filter or a Harley air cleaner, which was observed in
+    testing). This does NOT catch same-category-but-wrong-product noise for
+    generic consumable names (e.g. "grease filter" legitimately overlapping
+    with an unrelated Range Hood grease filter) — that class of false
+    positive is handled upstream by only pricing the primary/specific part
+    (see routes_report.py), not by this keyword check."""
+    query_kw = _relevance_keywords(query)
+    product_kw = _relevance_keywords(product_name)
+    if not query_kw or not product_kw:
+        return True
+    return bool(query_kw & product_kw)
+
+
 def _scrape_and_parse(keyword: str, max_candidates: int) -> list[dict]:
     raw_products = playwright_scrape_alibaba(keyword, limit=max_candidates)
     fallback_url = _ALIBABA_SEARCH_URL.format(keyword=keyword.strip().replace(" ", "+"))
 
     lookups = []
     for p in raw_products:
+        if not _is_relevant_product(keyword, p.get("name", "")):
+            logger.info("search_part_price: dropping irrelevant product %r for query %r", p.get("name"), keyword)
+            continue
         parsed = _parse_alibaba_price(p.get("price"))
         if parsed is None:
             continue

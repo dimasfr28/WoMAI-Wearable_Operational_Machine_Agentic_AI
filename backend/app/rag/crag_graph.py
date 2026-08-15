@@ -12,6 +12,7 @@ from typing import Literal, TypedDict
 from langgraph.graph import StateGraph, END
 
 from app.llm.groq_client import chat, chat_json
+from app.ml.outlier import RunIqrBounds, is_value_outlier
 from app.rag.grader import grade_documents
 from app.rag.part_price_search import searxng_search
 from app.rag.retriever import RetrievedDocument, retrieve_documents
@@ -28,35 +29,54 @@ class CRAGState(TypedDict):
     used_web_fallback: bool
     answer: str
     part_name: str | None
+    part_names: list[str]
 
 
-RAG_ANSWER_PROMPT = """Anda adalah asisten teknis predictive maintenance untuk mesin CNC.
-Berdasarkan konteks di bawah (manual servis / troubleshooting guide / riwayat data sensor),
-jawab query berikut dalam Bahasa Indonesia dengan TEPAT tiga bagian berikut, masing-masing
-sebagai heading terpisah:
+RAG_ANSWER_PROMPT = """You are a technical predictive maintenance assistant for CNC machines.
+Using ONLY the sources below (service manuals / troubleshooting guides / historical sensor run
+data), answer the query in English with EXACTLY three sections, each as its own heading:
 
-## Apa Masalahnya
-Diagnosis singkat: kondisi/kegagalan apa yang kemungkinan terjadi berdasarkan konteks dan data sensor.
+## What Is the Problem
+A direct, concise diagnosis: state which condition or failure the evidence indicates, based on
+the sources and sensor data.
 
-## SOP Penanganan
-Langkah-langkah konkret dan actionable yang harus dilakukan teknisi untuk mengatasi masalah ini,
-mengacu pada prosedur di konteks (manual servis/troubleshooting guide) bila tersedia.
+## Handling Procedure
+Concrete, actionable steps the technician must follow to resolve this, based on the procedures
+in the sources.
 
-## Part/Komponen Bermasalah
-Part atau komponen SPESIFIK yang paling mungkin perlu diperiksa/diganti — sebutkan nama
-komponen teknis yang konkret dan bisa dicari harganya di marketplace (mis. "spindle bearing",
-"ballscrew", "coolant pump", "servo motor axis Z", "toolholder"), BUKAN istilah generik
-seperti "Tool" atau "Gearbox" saja tanpa detail. Kalau konteks menyebut part number/kode
-spesifik, sertakan itu juga.
+## Affected Part / Component
+The SPECIFIC part or component that must be inspected or replaced — name a concrete technical
+component that can be looked up on a marketplace (e.g. "spindle bearing", "ballscrew", "coolant
+pump", "servo motor axis Z", "toolholder"), NOT a generic term like "Tool" or "Gearbox" alone.
+Include the exact part number/code if the sources mention one.
+
+CITATION RULE (mandatory): every claim you draw from a source MUST be followed by a citation
+naming that source, in parentheses, using the source's exact name WITHOUT any file extension —
+e.g. "(Haas Service Manual - VF_VM Spindle)", not "(Haas Service Manual - VF_VM Spindle.pdf)".
+Use only the source names listed under "Sources" below — do not invent or guess a source name.
+If a claim is not backed by any source, state it as your own technical inference and do not
+attach a citation to it.
+
+DIRECTNESS RULE (mandatory): write direct, definitive statements grounded in the evidence
+provided. Do not hedge with vague filler words such as "maybe", "perhaps", "possibly", "it
+seems", or "it might be" — if the evidence supports a conclusion, state it plainly; if it only
+supports a partial conclusion, state precisely what the evidence does and does not show, rather
+than softening the whole sentence with an ambiguous qualifier.
 
 Query: {query}
 
-Konteks:
+Sources:
 {context}
 
-Di akhir jawaban, sertakan baris terpisah dengan format persis (harus sama dengan nama part
-yang disebut di bagian "Part/Komponen Bermasalah" di atas):
-PART_NAME: <nama part/komponen yang paling mungkin perlu diganti/diperiksa, atau "tidak diketahui">
+At the end of your answer, add a separate line in exactly this format, listing every distinct
+part/component/consumable your "Handling Procedure" says must be REPLACED or ACTIVELY SERVICED
+(e.g. replaced, swapped, refilled, re-greased) to fix the problem — always include the part named
+in "Affected Part / Component" first. Do NOT include a part only mentioned in passing as something
+to inspect/check/verify without being replaced or serviced, and do NOT use a bare generic word
+like "filter" or "kit" alone — each entry must be a specific, marketplace-searchable product name
+(include the machine/brand context, e.g. "Haas ballscrew" not "screw"; "CNC spindle grease" not
+"grease"). Separate multiple items with commas, most important first:
+PART_NAMES: <part 1>, <part 2>, ... <or "unknown" if none>
 """
 
 
@@ -102,16 +122,49 @@ def web_search_searxng(state: CRAGState) -> CRAGState:
     return {**state, "documents": state["documents"] + extra_docs, "used_web_fallback": True}
 
 
-def _extract_part_name(answer_text: str) -> str | None:
+def extract_part_names(answer_text: str) -> list[str]:
+    """Public (no leading underscore) — also used by routes_report.py's
+    get_latest_report to re-derive the part list from a persisted rag_answer
+    (RootCauseAnalysis doesn't store part_names as its own column). Parses the
+    "PART_NAMES: <a>, <b>, ..." line RAG_ANSWER_PROMPT is instructed to emit —
+    every part/consumable the Handling Procedure says needs replacing or
+    servicing, used to build the Machine Report's multi-part cost table
+    (rancangan.txt "Machine Report REVISI" point 6)."""
     for line in answer_text.splitlines():
-        if line.strip().upper().startswith("PART_NAME:"):
+        if line.strip().upper().startswith("PART_NAMES:"):
             value = line.split(":", 1)[1].strip()
-            if value and value.lower() != "tidak diketahui":
-                return value
-    return None
+            if not value or value.lower() == "unknown":
+                return []
+            return [p.strip() for p in value.split(",") if p.strip() and p.strip().lower() != "unknown"]
+    return []
+
+
+def extract_part_name(answer_text: str) -> str | None:
+    """Primary part/component name (first entry of extract_part_names) —
+    used for the single "Affected Part / Component" / Machine Parts Checking
+    title, distinct from the full multi-part list used for pricing."""
+    names = extract_part_names(answer_text)
+    return names[0] if names else None
 
 
 MAX_CHUNK_CHARS_IN_PROMPT = 800
+
+
+def _source_name(metadata: dict) -> str:
+    """Citation label for one retrieved chunk — extension-free document name
+    for knowledge-base chunks (metadata["doc"] is already stored without a
+    file extension, see routes_knowledgebase.py's doc_name), or the page
+    title/domain for web-fallback results (no "doc" key)."""
+    doc = metadata.get("doc")
+    if doc:
+        return doc
+    title = metadata.get("title")
+    if title:
+        return title
+    url = metadata.get("url")
+    if url:
+        return url
+    return "unknown source"
 
 
 def generate_answer(state: CRAGState) -> CRAGState:
@@ -121,9 +174,16 @@ def generate_answer(state: CRAGState) -> CRAGState:
     # ditambah prompt instruksi + jawaban, request ditolak 413 dan seluruh
     # analisis root cause jatuh ke fallback. grade_documents (grader.py) sudah
     # membatasi ke 800 char/dok untuk alasan yang sama; disamakan di sini.
+    #
+    # Each source is labeled with its citation name (Source: <name>) directly
+    # above its content, so the LLM can cite it exactly rather than guessing
+    # or inventing a document name.
     context = (
-        "\n\n".join(d.page_content[:MAX_CHUNK_CHARS_IN_PROMPT] for d in state["documents"])
-        or "(tidak ada konteks ditemukan)"
+        "\n\n".join(
+            f"Source: {_source_name(d.metadata)}\n{d.page_content[:MAX_CHUNK_CHARS_IN_PROMPT]}"
+            for d in state["documents"]
+        )
+        or "(no sources found)"
     )
     prompt = RAG_ANSWER_PROMPT.format(query=state["query"], context=context)
     try:
@@ -131,12 +191,13 @@ def generate_answer(state: CRAGState) -> CRAGState:
     except Exception:
         logger.exception("generate_answer: Groq call failed")
         answer = (
-            "Tidak dapat menghasilkan analisis root cause otomatis saat ini "
-            "(layanan LLM tidak tersedia). Silakan periksa manual servis terkait secara manual.\n"
-            "PART_NAME: tidak diketahui"
+            "Automatic root-cause analysis is unavailable right now (LLM service unreachable). "
+            "Please check the relevant service manual manually.\n"
+            "PART_NAMES: unknown"
         )
-    part_name = _extract_part_name(answer)
-    return {**state, "answer": answer, "part_name": part_name}
+    part_names = extract_part_names(answer)
+    part_name = part_names[0] if part_names else None
+    return {**state, "answer": answer, "part_name": part_name, "part_names": part_names}
 
 
 def _build_graph():
@@ -160,6 +221,38 @@ def _build_graph():
 crag_app = _build_graph()
 
 
+CAUSE_ANALYSIS_SHORT_PROMPT = """Summarize the root-cause analysis below into EXACTLY ONE
+sentence in English, MAXIMUM 40 words. Name ONLY ONE part/component (the most relevant one) —
+if the analysis below names more than one part, pick only the most relevant. Preserve any
+citation from the analysis that supports the part you keep, in the same "(Source Name)" format
+(no file extension) — drop citations tied to parts you are not keeping. Do not use
+headings/markdown, do not include a "PART_NAMES:" line, reply with ONLY the one-sentence summary.
+
+Write a direct, definitive statement. Do not hedge with vague filler words such as "maybe",
+"perhaps", "possibly", "it seems", or "it might be" — state the conclusion the analysis supports
+plainly.
+
+Root-cause analysis:
+{root_cause_answer}
+"""
+
+
+def summarize_cause_analysis(root_cause_answer: str) -> str:
+    """"Cause Analysis LLM" ringkas untuk Machine Diagnosis "AI Explanation"
+    panel (rancangan.txt Section 5) — meringkas jawaban CRAG penuh
+    (RAG_ANSWER_PROMPT, 3 section) jadi maks 1 kalimat/40 kata, 1 part saja.
+    Meringkas jawaban yang SUDAH ADA (bukan retrieval ulang) — lebih murah dan
+    konsisten dengan analisis penuh yang sudah ditampilkan di root_cause.answer,
+    tidak berisiko menyebut part berbeda dari root cause utama."""
+    prompt = CAUSE_ANALYSIS_SHORT_PROMPT.format(root_cause_answer=root_cause_answer)
+    try:
+        summary = chat([{"role": "user", "content": prompt}], temperature=0.2)
+        return summary.strip()
+    except Exception:
+        logger.exception("summarize_cause_analysis: Groq call failed")
+        return "Automatic cause summary is unavailable right now — see the full analysis below."
+
+
 def run_crag(query_text: str, machine_id: str | None = None, search_queries: list[str] | None = None) -> CRAGState:
     """Entry point used by routes_report.py. `query_text` is the single-string
     representation stored as RootCauseAnalysis.rag_query and used for grading/
@@ -175,6 +268,7 @@ def run_crag(query_text: str, machine_id: str | None = None, search_queries: lis
         "used_web_fallback": False,
         "answer": "",
         "part_name": None,
+        "part_names": [],
     }
     return crag_app.invoke(initial_state)
 
@@ -185,38 +279,33 @@ def run_crag(query_text: str, machine_id: str | None = None, search_queries: lis
 # mengisi placeholder dengan istilah yang SUDAH dinormalisasi di sini membuat
 # perilakunya tidak bergantung penuh pada LLM mematuhi instruksi normalisasi
 # — kalau LLM lupa/salah, [TOP SHAP] yang disubstitusi tetap benar.
+# Kunci: nama kolom model klasifikasi baru (lihat predictor_clasification.py's
+# RAW_TO_MODEL_COL) — "air_temp_K" dst, bukan "Air temperature K".
 _SHAP_FEATURE_TO_GENERAL_TERM = {
-    "Air temperature K": "heat / temperature",
-    "Process temperature K": "heat / temperature",
-    "Rotational speed rpm": "speed",
-    "Tool wear min": "machine operating time",
+    "air_temp_K": "heat / temperature",
+    "proc_temp_K": "heat / temperature",
+    "rpm": "speed",
+    "tool_wear_min": "machine operating time",
 }
 
 
-def _is_feature_anomalous(feature_name: str, value: float, feature_row: dict | None) -> bool:
-    """True kalau nilai fitur ini benar-benar di luar IQR bounds training
-    model (best_performance_log.json) — dipakai untuk MEMILIH top-SHAP mana
-    yang genuinely anomali (bukan cuma "paling berkontribusi" tapi nilainya
-    masih dalam rentang wajar; SHAP value bisa nonzero murni dari interaksi
-    feature engineering)."""
-    from app.ml.predictor import get_model_bundle
-
-    bundle = get_model_bundle()
-    lower, upper = bundle.lower_bound, bundle.upper_bound
-
-    if feature_name == "Tool wear min":
-        hi = upper.get("Tool wear min")
-        return hi is not None and value > hi
-
-    if feature_name == "Rotational speed rpm":
-        lo, hi = lower.get("Rotational speed rpm"), upper.get("Rotational speed rpm")
-        return (hi is not None and value > hi) or (lo is not None and value < lo)
-
-    if feature_name in ("Air temperature K", "Process temperature K") and feature_row:
-        temp_diff = feature_row.get("process_temperature_k", 0) - feature_row.get("air_temperature_k", 0)
-        hi, lo = upper.get("temp_diff"), lower.get("temp_diff")
-        return (hi is not None and temp_diff > hi) or (lo is not None and temp_diff < lo)
-
+def _is_feature_anomalous(feature_name: str, value: float, run_bounds: RunIqrBounds | None) -> bool:
+    """True kalau nilai fitur ini di luar IQR bounds RUN INI (rancangan.txt —
+    IQR per RUN ID, menggantikan bound statis global training yang tidak ada
+    lagi sejak model lama dihapus) — dipakai untuk MEMILIH top-SHAP mana yang
+    genuinely anomali (bukan cuma "paling berkontribusi" tapi nilainya masih
+    dalam rentang wajar; SHAP value bisa nonzero murni dari interaksi feature
+    engineering)."""
+    if run_bounds is None:
+        return False
+    if feature_name == "tool_wear_min":
+        return is_value_outlier(value, run_bounds.tool_wear_min)
+    if feature_name == "rpm":
+        return is_value_outlier(value, run_bounds.rotational_speed_rpm)
+    if feature_name == "air_temp_K":
+        return is_value_outlier(value, run_bounds.air_temperature_k)
+    if feature_name == "proc_temp_K":
+        return is_value_outlier(value, run_bounds.process_temperature_k)
     return False
 
 
@@ -409,6 +498,11 @@ Better:
 
 "{name_machine} prolonged machine operating time failure troubleshooting"
 
+13. Do not phrase queries with hedging or ambiguous qualifiers (e.g. "maybe",
+"possibly", "might"). Queries are search strings, not claims, so state the
+condition directly (e.g. "prolonged machine operating time", not "possibly
+prolonged machine operating time").
+
 
 ==================================================
 ROOT CAUSE INPUT
@@ -463,7 +557,10 @@ search queries.
 
 
 def generate_search_queries(
-    shap_result: dict, machine_name: str = "CNC machine", feature_row: dict | None = None
+    shap_result: dict,
+    machine_name: str = "CNC machine",
+    feature_row: dict | None = None,
+    run_bounds: RunIqrBounds | None = None,
 ) -> tuple[str, list[str]]:
     """Query generation via LLM (rancangan.txt's RAG_QUERY_PROMPT) — mengganti
     build_root_cause_query()/_interpret_shap_feature() rule-based sebelumnya.
@@ -472,17 +569,20 @@ def generate_search_queries(
     bukan template kalimat hardcode per nama fitur.
 
     Root-cause description yang dikirim ke LLM tetap dibangun dari IQR bounds
-    (_is_feature_anomalous) — bukan LLM yang menilai "apakah nilainya tinggi",
-    supaya klaim anomali tetap berbasis statistik training data, bukan
-    tebakan LLM. LLM hanya bertugas mengubah gejala itu jadi query pencarian
-    yang adaptif dan general (tidak hardcode nama part/istilah dataset).
+    per RUN ID (_is_feature_anomalous, lihat app/ml/outlier.py) — bukan LLM
+    yang menilai "apakah nilainya tinggi", supaya klaim anomali tetap berbasis
+    statistik, bukan tebakan LLM. LLM hanya bertugas mengubah gejala itu jadi
+    query pencarian yang adaptif dan general (tidak hardcode nama part/istilah
+    dataset). `feature_row` parameter dipertahankan untuk kompatibilitas
+    signature, tidak lagi dipakai langsung di sini (temp_diff dulu dihitung
+    dari situ; sekarang bound per-fitur sudah cukup dari run_bounds).
 
     Returns (top_shap_term, search_queries) — top_shap_term dipakai sebagai
     representasi ringkas untuk RootCauseAnalysis.rag_query (kolom tunggal di
     DB), search_queries dipakai retrieve() untuk multi-query retrieval.
     """
     features = sorted(shap_result.get("features", []), key=lambda f: f["shap_value"], reverse=True)
-    anomalous = [f for f in features if f["shap_value"] > 0 and _is_feature_anomalous(f["feature_name"], f["value"], feature_row)]
+    anomalous = [f for f in features if f["shap_value"] > 0 and _is_feature_anomalous(f["feature_name"], f["value"], run_bounds)]
 
     top_features = anomalous or [f for f in features if f["shap_value"] > 0] or features[:1]
     top_feature = top_features[0] if top_features else None

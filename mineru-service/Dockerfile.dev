@@ -1,0 +1,49 @@
+FROM python:3.11-slim
+
+# Host has no working IPv6 route AND TCP port 53 (DNS-over-TCP) is blocked on this
+# network. download.pytorch.org/modelscope's AAAA answers alone exceed the
+# 512-byte classic UDP DNS limit, so glibc's getaddrinfo() gets a truncated
+# (TC=1) UDP response and retries over TCP — which then hangs forever since
+# TCP:53 never connects. Reprioritizing IPv4 (gai.conf) isn't enough because the
+# AAAA query itself still stalls; RES_OPTIONS=no-aaaa (glibc 2.34+) skips AAAA
+# queries entirely, avoiding the truncation/TCP-fallback path.
+ENV RES_OPTIONS="no-aaaa"
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/app/.cache/huggingface \
+    # Model downloads MUST go via ModelScope, not HuggingFace — HF is unusably
+    # slow/stalls on this network, ModelScope is fast and reliable.
+    MINERU_MODEL_SOURCE=modelscope
+
+# libgl1/libglib2.0-0: required at runtime by opencv-python (cv2), a transitive
+# dependency of mineru[pipeline]'s layout/OCR stack.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# hf-xet (huggingface_hub's newer "xet-bridge" transfer protocol, now a hard
+# dependency pulled in transitively by some HF downloads) hangs/stalls
+# indefinitely on this network — only *uninstalling* it forces the correct
+# plain-HTTP fallback. Same fix as backend/Dockerfile.dev.
+RUN pip uninstall -y hf-xet
+
+# Pre-download MinerU pipeline models at build time so the container starts
+# ready to parse immediately instead of blocking the first request on a
+# multi-hundred-MB model download.
+RUN mineru-models-download --source modelscope --model_type pipeline
+
+EXPOSE 8000
+
+# `mineru-api` is mineru[pipeline]'s own console_script entry point
+# (mineru.cli.fast_api:main) — a first-class supported way to run its bundled
+# FastAPI server as a long-lived process, not a custom wrapper. The backend
+# talks to it over HTTP (see backend/vendor/mineru_client.py) instead of
+# spawning a local subprocess per request, as MinerU's own demo script does
+# when no api_url is given.
+CMD ["mineru-api", "--host", "0.0.0.0", "--port", "8000"]

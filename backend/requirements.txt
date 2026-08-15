@@ -1,6 +1,3 @@
---extra-index-url https://download.pytorch.org/whl/cpu
---extra-index-url https://pypi.org/simple
-
 fastapi==0.121.3
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.36
@@ -15,22 +12,30 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
 # ML
-scikit-learn==1.9.0
+# scikit-learn/imbalanced-learn/xgboost pinned to match backend/saved/clasification/
+# clasification_model.pkl's recorded `versions` dict exactly (sklearn==1.7.2,
+# imblearn==0.14.2, xgboost==3.0.5) — pickled sklearn/xgboost estimators are
+# NOT guaranteed compatible across minor versions (InconsistentVersionWarning /
+# "please export via Booster.save_model" otherwise), so this must track the
+# training environment, not float to latest.
+scikit-learn==1.7.2
 joblib==1.4.2
 pandas==2.2.3
 numpy==1.26.4
 shap==0.46.0
+# imbalanced-learn: clasification_model.pkl's pipeline is an
+# imblearn.pipeline.Pipeline (not sklearn's) — unpickling it fails with
+# ModuleNotFoundError without this installed, even though no app code calls
+# imblearn directly.
+imbalanced-learn==0.14.2
+# xgboost: both clasification_model.pkl and horizon_model.pkl's estimator are
+# XGBoost — 3.0.5 to match clasification_model.pkl's recorded training version.
+xgboost==3.0.5
 
-# Embedding / vector store
-# torch pinned explicitly to the CPU-only wheel (via --extra-index-url above) so
-# sentence-transformers does not pull in multi-GB NVIDIA CUDA packages — this
-# backend container has no GPU.
-# Bumped from 2.5.1 -> 2.6.0 because mineru[pipeline] requires torch>=2.6.0,<3
-# (see MinerU/pyproject.toml [project.optional-dependencies].pipeline); 2.6.0 is
-# the lowest version satisfying that AND the lowest with a +cpu wheel published
-# (verified against download.pytorch.org/whl/cpu), so no CUDA is pulled in.
-torch==2.6.0+cpu
-sentence-transformers==3.3.1
+# Vector store. Embedding itself (torch/sentence-transformers) now lives in
+# the standalone embedding-service container (see embedding-service/) — this
+# backend only talks to it over HTTP (app/ingestion/embedder.py), so no torch
+# install is needed here anymore.
 chromadb==0.5.20
 
 # RAG / LLM
@@ -41,17 +46,18 @@ langgraph==0.2.60
 groq==0.13.0
 
 # Parsing / misc
-# Bumped from 4.12.3 -> 4.13.5 because mineru[pipeline] requires
-# beautifulsoup4>=4.13.5,<5 (mineru's own PyPI dependency metadata). Only
-# consumer in this codebase is chunking_docs.py's BeautifulSoup(text,
-# "html.parser") call, a stable/basic API unaffected by this bump.
+# Only consumer in this codebase is chunking_docs.py's BeautifulSoup(text,
+# "html.parser") call, a stable/basic API.
 beautifulsoup4==4.13.5
 lxml==5.3.0
 httpx==0.27.2
 
-# PDF parsing (MinerU, pipeline backend — CPU/OCR based, no GPU/vLLM stack).
-# Vendored fully into the image (see Dockerfile) so /knowledgebase/upload/pdf
-# does not depend on an external MinerU service. Deliberately mineru[pipeline],
-# NOT mineru[all]/mineru[vlm]/mineru[vllm] — those pull in vLLM + the full CUDA
-# stack, which is multi-GB and useless without a GPU.
-mineru[pipeline]==3.4.4
+# PDF parsing (MinerU) now runs in its own container (see mineru-service/) —
+# this backend only talks to it over HTTP via vendor/mineru_client.py, so the
+# mineru[pipeline] package (and the torch/opencv/onnxruntime stack it pulls
+# in transitively) is no longer installed here.
+
+# Machine Report PDF rendering (rancangan.txt Section 7) — HTML/CSS -> PDF,
+# needs libpango/libcairo system libs (see Dockerfile).
+weasyprint==63.1
+jinja2==3.1.4

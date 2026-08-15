@@ -20,6 +20,13 @@ interface ReportApiOut {
     model_version: string;
     threshold: number;
   };
+  horizon_prediction: {
+    predicted_label: boolean;
+    failure_probability: number;
+    model_version: string;
+    threshold: number;
+    horizon_minutes: number;
+  } | null;
   shap: {
     base_value: number;
     features: {
@@ -71,6 +78,8 @@ interface ReportApiOut {
     why: string;
     expected_impact: string;
   } | null;
+  cause_analysis_short: string | null;
+  suggestion_general: string | null;
   final_report_text: string;
   llm_model: string;
   created_at: string;
@@ -104,6 +113,15 @@ function fromApi(r: ReportApiOut): ReportData {
       modelVersion: r.prediction.model_version,
       threshold: r.prediction.threshold,
     },
+    horizonPrediction: r.horizon_prediction
+      ? {
+          predictedLabel: r.horizon_prediction.predicted_label,
+          failureProbability: r.horizon_prediction.failure_probability,
+          modelVersion: r.horizon_prediction.model_version,
+          threshold: r.horizon_prediction.threshold,
+          horizonMinutes: r.horizon_prediction.horizon_minutes,
+        }
+      : null,
     shap: {
       baseValue: r.shap.base_value,
       features: r.shap.features.map((f) => ({
@@ -163,6 +181,8 @@ function fromApi(r: ReportApiOut): ReportData {
           expectedImpact: r.recommended_action.expected_impact,
         }
       : null,
+    causeAnalysisShort: r.cause_analysis_short,
+    suggestionGeneral: r.suggestion_general,
     finalReportText: r.final_report_text,
     llmModel: r.llm_model,
     createdAt: r.created_at,

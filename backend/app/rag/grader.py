@@ -9,16 +9,16 @@ from app.rag.retriever import RetrievedDocument
 
 logger = logging.getLogger(__name__)
 
-GRADE_PROMPT = """Anda adalah penilai relevansi dokumen untuk sistem retrieval-augmented generation.
-Untuk setiap dokumen di bawah, tentukan apakah dokumen tersebut relevan untuk menjawab query.
+GRADE_PROMPT = """You are a document relevance grader for a retrieval-augmented generation system.
+For each document below, determine whether it is relevant for answering the query.
 
 Query: {query}
 
-Dokumen:
+Documents:
 {docs_block}
 
-Jawab HANYA dalam format JSON: {{"verdicts": [true/false, ...]}} dengan panjang array
-persis sama dengan jumlah dokumen di atas, urut sesuai urutan dokumen."""
+Reply ONLY in JSON format: {{"verdicts": [true/false, ...]}} with an array length exactly
+matching the number of documents above, in the same order as the documents."""
 
 
 def grade_documents(query: str, documents: list[RetrievedDocument]) -> tuple[str, list[bool]]:

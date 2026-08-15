@@ -143,7 +143,7 @@ export default function LandingPage() {
             ))}
           </div>
           <Link
-            href="/chat"
+            href="/mesin"
             className={cn(buttonVariants({ size: "sm" }), "rounded-full")}
           >
             Buka Aplikasi
@@ -186,7 +186,7 @@ export default function LandingPage() {
             {/* Kartu anotasi mengambang */}
             <div className="flex justify-end">
               <Link
-                href="/chat"
+                href="/mesin"
                 className="group flex w-full max-w-sm items-center gap-3 rounded-2xl bg-white p-3 text-slate-900 shadow-lg transition-transform hover:-translate-y-0.5"
               >
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-red-50 font-mono text-xs font-semibold text-red-700">
@@ -385,7 +385,7 @@ export default function LandingPage() {
             hanya bertugas memahami kalimat teknisi dan menyusun jawaban.
           </p>
           <Link
-            href="/chat"
+            href="/mesin"
             className={cn(buttonVariants({ size: "lg" }), "gap-2 rounded-full")}
           >
             Mulai Percakapan <ArrowRight className="size-4" />
@@ -406,7 +406,7 @@ export default function LandingPage() {
                 kasar sejak pagi&quot;
               </p>
               <Link
-                href="/chat"
+                href="/mesin"
                 className={cn(
                   buttonVariants({ variant: "secondary" }),
                   "w-fit gap-2 rounded-full",
@@ -420,7 +420,7 @@ export default function LandingPage() {
                 <span className="font-mono text-xs tracking-wide text-blue-300/60 uppercase">
                   Aplikasi
                 </span>
-                <Link href="/chat" className="hover:text-white">
+                <Link href="/mesin" className="hover:text-white">
                   Chat
                 </Link>
                 <Link href="/riwayat" className="hover:text-white">
@@ -447,7 +447,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 pt-5 pb-2 text-xs text-slate-500 sm:flex-row">
           <span>© 2026 WO.M.AI. Seluruh hak cipta.</span>
           <div className="flex items-center gap-5">
-            <Link href="/chat" className="hover:text-slate-900">
+            <Link href="/mesin" className="hover:text-slate-900">
               Chat
             </Link>
             <Link href="/riwayat" className="hover:text-slate-900">

@@ -174,7 +174,11 @@ async def upload_pdf(
         raise HTTPException(status_code=500, detail="Gagal menyimpan chunk ke database") from None
 
     try:
-        embeddings = embed_texts([c.content for c in db_chunks])
+        # embed_texts is now a blocking HTTP call to embedding-service (see
+        # app/ingestion/embedder.py) — this route is async def, so it must be
+        # offloaded to a thread to avoid stalling uvicorn's event loop for
+        # every other concurrent request while waiting on the network call.
+        embeddings = await asyncio.to_thread(embed_texts, [c.content for c in db_chunks])
         collection = get_docs_collection()
         upsert_chunks(
             collection,

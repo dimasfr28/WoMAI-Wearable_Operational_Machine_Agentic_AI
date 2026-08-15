@@ -163,18 +163,80 @@ export interface ReportRecommendedAction {
   expectedImpact: string;
 }
 
+// "Probability Failure in +10 Minute" (rancangan.txt Section 5) — model
+// TERPISAH dari ReportPrediction (menjawab pertanyaan berbeda: "akan gagal
+// dalam N menit ke depan?", bukan "sedang gagal sekarang?"). null kalau model
+// horizon gagal saat report digenerate (backend tetap sukses tanpa itu).
+export interface ReportHorizonPrediction {
+  predictedLabel: boolean;
+  failureProbability: number; // 0..1
+  modelVersion: string;
+  threshold: number; // 0..1
+  horizonMinutes: number;
+}
+
 export interface ReportData {
   sensor: ReportSensorSnapshot;
   prediction: ReportPrediction;
+  horizonPrediction: ReportHorizonPrediction | null;
   shap: ReportShap;
   recommendations: ReportRecommendations;
   rootCause: ReportRootCause | null;
   partPrices: ReportPartPrice[];
   aiExplanation: string | null;
   recommendedAction: ReportRecommendedAction | null;
+  // Machine Diagnosis "AI Explanation" panel (rancangan.txt Section 5):
+  // causeAnalysisShort — ringkasan root cause maks 1 kalimat/40 kata, 1 part.
+  // null kalau predictedLabel=false (CRAG tidak dijalankan untuk kondisi normal).
+  causeAnalysisShort: string | null;
+  // suggestionGeneral — saran perbaikan istilah general/non-numerik (bukan
+  // angka sensor mentah), arah over/under dari worst-case delta (KNN).
+  suggestionGeneral: string | null;
   finalReportText: string;
   llmModel: string;
   createdAt: string; // ISO
+}
+
+// AI Early Warning panel (rancangan.txt Section 5) — satu kartu per parameter
+// sensor, urutan dari SHAP contribution paling besar.
+export interface EarlyWarningItem {
+  title: string;
+  parameter: string;
+  parameterLabel: string;
+  unit: string;
+  currentValue: number;
+  suggestedAdjustment: number | null;
+  shapContributionPct: number;
+  recommendedAction: string;
+  // IQR outlier per RUN ID (rancangan.txt) — true = highlight bayangan merah.
+  isAnomaly: boolean;
+}
+
+export interface MachineStatus {
+  operationalStatus: string; // "RUNNING" | "WARNING" | "IDLE" | "OFFLINE"
+  lastReadingAt: string | null; // ISO
+  predictionStabilityPct: number | null;
+  earlyWarning: EarlyWarningItem[];
+}
+
+// Machine Report (rancangan.txt Section 7) — satu row per PDF ter-generate.
+export interface MachineReportItem {
+  id: string;
+  reportNumber: string;
+  operatingStatus: string; // "Normal" | "Warning" | "Failure"
+  createdAt: string; // ISO
+}
+
+// Dokumen manual servis (PDF) yang sudah di-ingest ke knowledge base RAG —
+// read-only di frontend (upload/hapus tetap lewat backend Swagger/script
+// migrasi untuk saat ini, lihat KnowledgeBaseDocuments di /sop).
+export interface KnowledgeBaseDocument {
+  id: string;
+  originalFilename: string | null;
+  docName: string;
+  status: string; // "processing" | "completed" | "rejected_duplicate" | "failed"
+  chunkCount: number;
+  uploadedAt: string; // ISO
 }
 
 export interface ChatSession {

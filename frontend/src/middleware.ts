@@ -30,8 +30,14 @@ export function middleware(request: NextRequest): NextResponse {
   }
 
   if (hasSession && (pathname === "/login" || pathname === "/register")) {
+    // Setiap kali aplikasi dibuka (baru login ATAU sesi lama masih ada),
+    // user WAJIB mendarat di /mesin dulu — mesin aktif tersimpan di
+    // localStorage (client-only), jadi middleware ini tidak bisa tahu
+    // apakah user "sudah pernah pilih mesin"; /mesin sendiri yang
+    // menentukan langkah berikutnya (pilih mesin -> redirect ke
+    // /machine-diagnosis, lihat app/(app)/mesin/page.tsx).
     const url = request.nextUrl.clone();
-    url.pathname = "/chat";
+    url.pathname = "/mesin";
     url.search = "";
     return NextResponse.redirect(url);
   }
@@ -41,6 +47,11 @@ export function middleware(request: NextRequest): NextResponse {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons|sw.js|offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // /api/* dikecualikan: Route Handlers (mis. /api/chat, /api/machine-report/*)
+    // menangani auth mereka sendiri (lewat getSessionToken()/backend 401) dan
+    // mengharapkan JSON/binary response, bukan redirect 307 ke halaman HTML
+    // /login — redirect di sini akan merusak fetch()/<iframe src> yang
+    // memanggilnya (respons jadi HTML redirect, bukan kontrak API yang diharapkan).
+    "/((?!api/|_next/static|_next/image|favicon.ico|manifest.webmanifest|icons|sw.js|offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
