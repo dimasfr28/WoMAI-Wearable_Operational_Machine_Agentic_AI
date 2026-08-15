@@ -32,7 +32,11 @@ from app.schemas.sensor import (
     SensorReadingSubmitResponseOut,
     SensorRunOut,
 )
-from app.vectorstore.chroma_client import get_sensor_collection, upsert_chunks
+from app.vectorstore.chroma_client import (
+    get_bot_sensor_collection,
+    get_sensor_collection,
+    upsert_chunks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,23 +124,33 @@ def _close_run_and_build_chunk(db: Session, run: SensorRun) -> None:
 
     try:
         embedding = embed_texts([db_chunk.content])[0]
-        collection = get_sensor_collection()
+        ids = [db_chunk.chroma_id]
+        embeddings = [embedding]
+        documents = [db_chunk.content]
+        metadatas = [
+            {
+                "postgres_chunk_id": str(db_chunk.id),
+                "document_id": str(document.id),
+                "machine_id": str(document.machine_id) if document.machine_id else "",
+                "doc": document.doc_name,
+                "machine_type": document.machine_type,
+                "run_label": run.run_label,
+                "failure_count": run.failure_count,
+            }
+        ]
         upsert_chunks(
-            collection,
-            ids=[db_chunk.chroma_id],
-            embeddings=[embedding],
-            documents=[db_chunk.content],
-            metadatas=[
-                {
-                    "postgres_chunk_id": str(db_chunk.id),
-                    "document_id": str(document.id),
-                    "machine_id": str(document.machine_id) if document.machine_id else "",
-                    "doc": document.doc_name,
-                    "machine_type": document.machine_type,
-                    "run_label": run.run_label,
-                    "failure_count": run.failure_count,
-                }
-            ],
+            get_sensor_collection(),
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas,
+        )
+        upsert_chunks(
+            get_bot_sensor_collection(),
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas,
         )
         document.status = "completed"
     except Exception:

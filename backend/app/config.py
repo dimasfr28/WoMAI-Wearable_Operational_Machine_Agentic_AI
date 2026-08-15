@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     CHROMA_PORT: int = 8000
     CHROMA_COLLECTION_DOCS: str = "knowledgebase_docs"
     CHROMA_COLLECTION_SENSOR: str = "knowledgebase_sensor_runs"
+    CHROMA_COLLECTION_BOT_SENSOR: str = "bot_sensor_data"
 
     # --- Embedding ---
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
