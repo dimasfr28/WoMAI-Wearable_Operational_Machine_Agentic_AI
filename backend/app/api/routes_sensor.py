@@ -22,6 +22,7 @@ from app.ingestion.chunking_sensor import ReadingLike, RunLike, build_run_chunk
 from app.ingestion.embedder import embed_texts
 from app.ml.outlier import RunIqrBounds, compute_run_iqr_bounds, is_value_outlier
 from app.ml.predictor_clasification import predict_failure
+from app.notifications.telegram import notify_new_reading
 from app.schemas.sensor import (
     SensorHistoryOut,
     SensorHistoryPointOut,
@@ -227,7 +228,7 @@ def submit_reading(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_current_user_optional),
 ):
-    _require_machine(db, machine_id)
+    machine = _require_machine(db, machine_id)
     run = assign_run_id(payload, db, machine_id)
     reading = SensorReading(
         run_id=run.id,
@@ -259,6 +260,8 @@ def submit_reading(
     db.refresh(reading)
 
     _bump_failure_count_if_needed(db, run, pred_result.label)
+
+    notify_new_reading(machine.name, pred_result)
 
     # --- Perubahan 2: pipeline SHAP/KNN/CRAG/laporan LLM dijalankan SEKALI di
     # sini, saat data sensor baru masuk — bukan lagi tiap kali GET /report/latest
@@ -305,7 +308,7 @@ def submit_readings_batch(
 ):
     """Endpoint API untuk DAG (input otomatis, bulk) — Section 7. Belum dipakai
     DAG saat ini, disiapkan supaya integrasi Airflow/Prefect nanti tinggal panggil."""
-    _require_machine(db, machine_id)
+    machine = _require_machine(db, machine_id)
     out = []
     for item in payload.readings:
         run = assign_run_id(item, db, machine_id)
@@ -338,6 +341,8 @@ def submit_readings_batch(
         db.refresh(reading)
 
         _bump_failure_count_if_needed(db, run, pred_result.label)
+
+        notify_new_reading(machine.name, pred_result)
 
         try:
             _run_report_pipeline(db, reading, pred_result, machine_id)

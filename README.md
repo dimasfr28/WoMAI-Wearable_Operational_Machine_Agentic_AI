@@ -211,6 +211,7 @@ Lihat `.env.example` untuk daftar lengkap. Ringkasannya (dibaca oleh `backend/ap
 | `DUPLICATE_CHUNK_SIMILARITY_THRESHOLD`, `DUPLICATE_CHUNK_RATIO_THRESHOLD` | Ambang batas deteksi dokumen duplikat |
 | `JWT_EXPIRE_MINUTES`, `JWT_ALGORITHM` | Konfigurasi token autentikasi (`JWT_SECRET` di `.env` **diabaikan** — lihat catatan di atas) |
 | `BACKEND_DOMAIN`, `FRONTEND_DOMAIN` | Hanya dipakai di production (routing Traefik/Dokploy), tidak dipakai di dev |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Opsional — kirim notifikasi Telegram tiap ada pembacaan sensor baru & terprediksi. Kosongkan salah satu/keduanya untuk menonaktifkan. Setup: buat bot via @BotFather di Telegram, lalu ambil `chat_id` dari `https://api.telegram.org/bot<TOKEN>/getUpdates` setelah mengirim pesan apa pun ke bot tersebut. |
 
 > Variabel `SUPABASE_*` yang mungkin masih ada di `.env` peninggalan eksperimen awal proyek dan **tidak dibaca** oleh kode saat ini — aman dihapus.
 

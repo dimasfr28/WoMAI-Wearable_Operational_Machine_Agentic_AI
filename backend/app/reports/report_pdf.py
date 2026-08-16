@@ -14,6 +14,7 @@ in a formal report would be worse than omitting the section.
 """
 from __future__ import annotations
 
+import base64
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -29,6 +30,18 @@ _env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
     autoescape=select_autoescape(["html"]),
 )
+
+_LOGO_PATH = _TEMPLATE_DIR / "assets" / "logo.png"
+
+
+def _logo_data_uri() -> str | None:
+    """Base64-embeds the letterhead logo directly in the HTML so WeasyPrint
+    doesn't need filesystem access via base_url (HTML(string=...) has none) —
+    returns None if the asset hasn't been dropped in yet, so the template can
+    fall back to a text-only "WO.M.AI" wordmark instead of a broken image."""
+    if not _LOGO_PATH.is_file():
+        return None
+    return "data:image/png;base64," + base64.b64encode(_LOGO_PATH.read_bytes()).decode("ascii")
 
 
 @dataclass
@@ -214,6 +227,7 @@ def render_machine_report_pdf(
         machine_name=machine_name,
         report_number=report_number,
         report_datetime=datetime.now(timezone.utc).strftime("%d %B %Y, %H:%M UTC"),
+        logo_data_uri=_logo_data_uri(),
         operating_status=operating_status,
         sensor=report_out.sensor,
         prediction=report_out.prediction,
