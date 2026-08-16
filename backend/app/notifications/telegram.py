@@ -40,5 +40,15 @@ def notify_new_reading(machine_name: str, pred_result: ClasificationResult) -> N
             timeout=5.0,
         )
         response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        # Never log `exc`/`response`/`url` here: httpx.HTTPStatusError's
+        # message and repr embed the request URL, which contains the raw
+        # Telegram bot token (Telegram puts the token in the URL path).
+        # Logging the exception object (e.g. via logger.exception) would
+        # leak the live bot token into the logs in cleartext.
+        logger.error(
+            "notify_new_reading: Telegram API returned HTTP %s",
+            exc.response.status_code,
+        )
     except Exception:
         logger.exception("notify_new_reading: failed to send Telegram notification")
