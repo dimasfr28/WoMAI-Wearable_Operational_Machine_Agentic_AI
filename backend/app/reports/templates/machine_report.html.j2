@@ -6,8 +6,18 @@
 <style>
   @page {
     size: A4;
-    margin: 2cm 1.8cm;
-    @bottom-center {
+    /* Top/bottom margins widened vs. the original 2cm to leave room for the
+       running letterhead/footer (see .letterhead / .doc-footer below) —
+       WeasyPrint renders @top-center/@bottom-left content inside the page
+       margin box, so the margin itself must be tall enough to fit it. */
+    margin: 3.4cm 1.8cm 2.6cm 1.8cm;
+    @top-center {
+      content: element(pageHeader);
+    }
+    @bottom-left {
+      content: element(pageFooter);
+    }
+    @bottom-right {
       content: "Page " counter(page) " of " counter(pages);
       font-size: 8pt;
       color: #888;
@@ -47,11 +57,43 @@
   .badge-failure { background: #d33; }
   .prose { margin: 6px 0; }
   hr { border: none; border-top: 0.75pt solid #ccc; margin: 18px 0; }
-  .footer { margin-top: 30px; font-size: 9pt; color: #777; text-align: center; }
-  .footer .brand { font-weight: 600; color: #333; }
+
+  /* Letterhead: rendered once in the source but repeated on every page via
+     `position: running(pageHeader)` + @top-center above — NOT part of the
+     normal document flow, so it's placed near the top of <body> purely for
+     source readability. */
+  .letterhead { position: running(pageHeader); }
+  .letterhead-table { width: 100%; border-collapse: collapse; border-bottom: 1.5pt solid #0059ab; }
+  .letterhead-table td { border: none; padding: 0 0 6px 0; vertical-align: middle; }
+  .letterhead-logo img { height: 26px; }
+  .letterhead-logo .wordmark { font-size: 15pt; font-weight: 800; color: #0059ab; letter-spacing: 0.3px; }
+  .letterhead-tagline { text-align: right; font-size: 8pt; color: #666; }
+
+  /* Running footer (brand strip) — page-number counter stays a separate
+     @bottom-right box since content: on a margin box can't mix an element()
+     with a counter() in the same box. */
+  .doc-footer { position: running(pageFooter); font-size: 8pt; color: #888; }
+  .doc-footer strong { color: #0059ab; }
 </style>
 </head>
 <body>
+
+<div class="letterhead">
+  <table class="letterhead-table">
+    <tr>
+      <td class="letterhead-logo">
+        {% if logo_data_uri %}
+        <img src="{{ logo_data_uri }}" alt="WO.M.AI">
+        {% else %}
+        <span class="wordmark">WO.M.AI</span>
+        {% endif %}
+      </td>
+      <td class="letterhead-tagline">AI Predictive Maintenance &amp; Decision Support System</td>
+    </tr>
+  </table>
+</div>
+
+<div class="doc-footer"><strong>WO.M.AI</strong> — AI Predictive Maintenance &amp; Decision Support System</div>
 
 <h1>MACHINE CONDITION REPORT — {{ machine_name | upper }}</h1>
 
@@ -187,12 +229,6 @@
 {% for paragraph in narrative.summary.split("\n\n") %}
 <p class="prose">{{ paragraph }}</p>
 {% endfor %}
-
-<div class="footer">
-  <p class="brand">CNC AI Copilot</p>
-  <p>AI Predictive Maintenance &amp; Decision Support System</p>
-  <p>Generated at: {{ report_datetime }}</p>
-</div>
 
 </body>
 </html>
