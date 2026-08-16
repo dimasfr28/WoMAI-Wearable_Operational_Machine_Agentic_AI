@@ -57,7 +57,7 @@ export function AppSidebar() {
             >
               <div className="relative aspect-square size-8 overflow-hidden rounded-lg">
                 <Image
-                  src="/images/logo_icon.png"
+                  src="/images/logo_womai_1x1.png"
                   alt="WO.M.AI Logo"
                   fill
                   sizes="32px"
