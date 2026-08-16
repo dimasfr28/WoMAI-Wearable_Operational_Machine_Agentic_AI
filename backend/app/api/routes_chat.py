@@ -34,6 +34,7 @@ from app.db.session import SessionLocal
 from app.llm.groq_client import chat, chat_json
 from app.ml.predictor_clasification import RAW_TO_MODEL_COL, ClasificationResult, predict_failure
 from app.ml.shap_tool import explain_failure_shap
+from app.notifications.telegram import notify_new_reading
 from app.rag.final_report import WhatIfContext, generate_what_if_narrative
 from app.schemas.chat import ChatIn
 from app.schemas.sensor import SensorReadingIn
@@ -253,6 +254,9 @@ def _run_predict(db: Session, user: User, intent_data: dict, sops: list[Sop]):
     db.commit()
     db.refresh(reading)
     _bump_failure_count_if_needed(db, run, pred_result.label)
+
+    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    notify_new_reading(machine.name if machine else "Unknown Machine", pred_result)
 
     report = _run_report_pipeline(db, reading, pred_result, machine_id)
 
