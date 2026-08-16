@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 1440
     JWT_ALGORITHM: str = "HS256"
 
+    # --- Telegram notifications (optional — no-op if either is empty, see
+    # app/notifications/telegram.py) ---
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
