@@ -43,7 +43,7 @@ export function ChatMessages({
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <div className="relative size-12 overflow-hidden rounded-xl shadow-sm border border-slate-100 bg-slate-50">
               <Image
-                src="/images/logo_icon.png"
+                src="/images/logo_womai_1x1.png"
                 alt="WO.M.AI Logo"
                 fill
                 sizes="48px"

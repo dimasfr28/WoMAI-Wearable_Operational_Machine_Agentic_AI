@@ -120,7 +120,7 @@ export default function LandingPage() {
           <Link href="/" className="flex items-center gap-2 pl-1">
             <div className="relative size-8 overflow-hidden rounded-lg shadow-sm">
               <Image
-                src="/images/logo_icon.png"
+                src="/images/logo_womai_1x1.png"
                 alt="WO.M.AI Logo"
                 fill
                 sizes="32px"
