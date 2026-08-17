@@ -101,7 +101,8 @@ Reply ONLY in JSON with exactly this schema (no other text):
 {{
   "ai_explanation": "<1-2 sentences in English explaining why this prediction occurred, naming the top contributing feature>",
   "why": "<1 sentence in English explaining why the suggested adjustment would help, or an empty string if there is no recommendation>",
-  "expected_impact": "<1 short sentence in English on the expected impact of the adjustment, or an empty string if there is no recommendation>"
+  "expected_impact": "<1 short sentence in English on the expected impact of the adjustment, or an empty string if there is no recommendation>",
+  "cause_analysis": "<ONLY fill this if the prediction below is a NORMAL condition (not a failure): one short sentence stating the machine is currently within normal operating parameters, referencing the top contributing feature in GENERAL terms only. Do NOT name any specific machine part or component (e.g. do not say "spindle bearing", "servo motor", "coolant pump") — there is no diagnosed fault to attribute to a part. If the prediction below IS a failure, reply with an empty string here instead — a separate, real root-cause analysis covers that case.>"
 }}
 
 Write direct, definitive statements grounded in the data below. Do not hedge with vague filler
@@ -138,6 +139,7 @@ def generate_early_warning_narrative(context: EarlyWarningContext) -> dict:
             "ai_explanation": data.get("ai_explanation") or "",
             "why": data.get("why") or "",
             "expected_impact": data.get("expected_impact") or "",
+            "cause_analysis": data.get("cause_analysis") or "",
         }
     except Exception:
         logger.exception("generate_early_warning_narrative: Groq call failed")
@@ -145,6 +147,10 @@ def generate_early_warning_narrative(context: EarlyWarningContext) -> dict:
             "ai_explanation": f"{context.top_feature_name} is the top contributing factor to this prediction.",
             "why": "",
             "expected_impact": "",
+            "cause_analysis": (
+                "" if context.predicted_label
+                else f"Current readings are within normal operating parameters; {context.top_feature_name} shows no abnormal pattern."
+            ),
         }
 
 

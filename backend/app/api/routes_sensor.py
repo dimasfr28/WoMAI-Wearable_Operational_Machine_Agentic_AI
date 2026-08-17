@@ -261,20 +261,31 @@ def submit_reading(
 
     _bump_failure_count_if_needed(db, run, pred_result.label)
 
-    notify_new_reading(machine.name, pred_result)
-
     # --- Perubahan 2: pipeline SHAP/KNN/CRAG/laporan LLM dijalankan SEKALI di
     # sini, saat data sensor baru masuk — bukan lagi tiap kali GET /report/latest
     # dipanggil. pred_result yang sudah dihitung di atas dipakai ulang (TIDAK
     # panggil predict_failure() dua kali) — lihat _run_report_pipeline signature. ---
+    report = None
     try:
-        _run_report_pipeline(db, reading, pred_result, machine_id)
+        report = _run_report_pipeline(db, reading, pred_result, machine_id)
     except Exception:
         logger.exception(
             "submit_reading: _run_report_pipeline failed for reading %s — "
             "GET /report/latest will 404 until this is retried/regenerated",
             reading.id,
         )
+
+    # notify_new_reading() called after the pipeline (not right after
+    # pred_result) so the Telegram message can include the horizon model's
+    # "+N Minute" probability too — that's only known once the pipeline
+    # (which computes it) has run. report stays None if the pipeline failed
+    # above; notify_new_reading() just omits the horizon line in that case.
+    notify_new_reading(
+        machine.name,
+        pred_result,
+        horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
+        horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
+    )
 
     return SensorReadingSubmitResponseOut(
         reading=SensorReadingOut(
@@ -342,15 +353,21 @@ def submit_readings_batch(
 
         _bump_failure_count_if_needed(db, run, pred_result.label)
 
-        notify_new_reading(machine.name, pred_result)
-
+        report = None
         try:
-            _run_report_pipeline(db, reading, pred_result, machine_id)
+            report = _run_report_pipeline(db, reading, pred_result, machine_id)
         except Exception:
             logger.exception(
                 "submit_readings_batch: _run_report_pipeline failed for reading %s",
                 reading.id,
             )
+
+        notify_new_reading(
+            machine.name,
+            pred_result,
+            horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
+            horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
+        )
 
         out.append(
             SensorReadingOut(
