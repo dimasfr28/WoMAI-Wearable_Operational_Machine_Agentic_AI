@@ -206,25 +206,36 @@ def _build_early_warning(db: Session, prediction: Prediction, run_bounds: RunIqr
     items = []
     for row in shap_rows:
         suggested = adjustments.get(row.feature_name)
-        if suggested is None:
-            # KNN tidak menyarankan perubahan (sudah identik dengan titik aman
-            # terdekat, atau data historis belum cukup) — tidak relevan ditampilkan.
-            continue
-
         param_key, param_label, unit = _PARAM_META.get(row.feature_name, (row.feature_name, row.feature_name, ""))
         contribution_pct = round(abs(float(row.shap_value)) / total_abs_shap * 100, 1)
         feature_value = float(row.feature_value)
 
+        # KNN sometimes has no adjustment to suggest (this reading already
+        # matches the nearest safe point, or there's not enough historical
+        # data yet) — still show the card with the current value (this panel
+        # is the only place raw sensor values render on this page), just
+        # without a suggested target. is_anomaly stays independent of this
+        # (IQR outlier check per RUN ID), so the red/green tint is never
+        # gated on whether KNN happened to have a suggestion.
+        if suggested is None:
+            title = f"{param_label} within normal range"
+            suggested_adjustment = None
+            recommended_action = f"{param_label} is within the safe operating range — no adjustment needed."
+        else:
+            title = f"{param_label} approaching/exceeding normal range"
+            suggested_adjustment = float(suggested)
+            recommended_action = _recommended_action_text(row.feature_name, feature_value, suggested_adjustment, run_bounds)
+
         items.append(
             EarlyWarningOut(
-                title=f"{param_label} approaching/exceeding normal range",
+                title=title,
                 parameter=param_key,
                 parameter_label=param_label,
                 unit=unit,
                 current_value=feature_value,
-                suggested_adjustment=float(suggested),
+                suggested_adjustment=suggested_adjustment,
                 shap_contribution_pct=contribution_pct,
-                recommended_action=_recommended_action_text(row.feature_name, feature_value, float(suggested), run_bounds),
+                recommended_action=recommended_action,
                 is_anomaly=is_value_outlier(feature_value, _bounds_attr.get(row.feature_name)),
             )
         )
