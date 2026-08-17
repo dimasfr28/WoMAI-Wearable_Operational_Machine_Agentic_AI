@@ -318,7 +318,12 @@ def _run_report_pipeline(
     # --- 6.9 / 6.10 RAG + part price (only if predicted failure) ---
     root_cause_out: RootCauseOut | None = None
     part_price_out: list[PartPriceOut] = []
-    cause_analysis_short: str | None = None
+    # Default for the NORMAL case: narrative["cause_analysis"] (generated
+    # above, alongside ai_explanation) — deliberately generic, names no
+    # machine part, since there's no diagnosed fault to attribute to a part.
+    # Overwritten below with the real CRAG-derived summary (which DOES name
+    # parts) if this reading was predicted as a failure.
+    cause_analysis_short: str | None = narrative.get("cause_analysis") or None
 
     if pred_result.label:
         machine_row = db.query(Machine).filter(Machine.id == machine_id).first()
