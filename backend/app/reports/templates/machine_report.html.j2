@@ -9,8 +9,9 @@
     /* Top/bottom margins widened vs. the original 2cm to leave room for the
        running letterhead/footer (see .letterhead / .doc-footer below) —
        WeasyPrint renders @top-center/@bottom-left content inside the page
-       margin box, so the margin itself must be tall enough to fit it. */
-    margin: 3.4cm 1.8cm 2.6cm 1.8cm;
+       margin box, so the margin itself must be tall enough to fit it. Top
+       margin sized for the larger logo below (40px + padding). */
+    margin: 4.2cm 1.8cm 2.6cm 1.8cm;
     @top-center {
       content: element(pageHeader);
     }
@@ -63,11 +64,11 @@
      normal document flow, so it's placed near the top of <body> purely for
      source readability. */
   .letterhead { position: running(pageHeader); }
-  .letterhead-table { width: 100%; border-collapse: collapse; border-bottom: 1.5pt solid #0059ab; }
-  .letterhead-table td { border: none; padding: 0 0 6px 0; vertical-align: middle; }
-  .letterhead-logo img { height: 26px; }
-  .letterhead-logo .wordmark { font-size: 15pt; font-weight: 800; color: #0059ab; letter-spacing: 0.3px; }
-  .letterhead-tagline { text-align: right; font-size: 8pt; color: #666; }
+  .letterhead-table { width: 100%; border-collapse: collapse; border-bottom: 2pt solid #0059ab; }
+  .letterhead-table td { border: none; padding: 0 0 10px 0; vertical-align: middle; }
+  .letterhead-logo img { height: 40px; }
+  .letterhead-logo .wordmark { font-size: 22pt; font-weight: 800; color: #0059ab; letter-spacing: 0.3px; }
+  .letterhead-tagline { text-align: right; font-size: 9.5pt; color: #666; }
 
   /* Running footer (brand strip) — page-number counter stays a separate
      @bottom-right box since content: on a margin box can't mix an element()
