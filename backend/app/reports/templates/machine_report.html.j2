@@ -10,8 +10,8 @@
        running letterhead/footer (see .letterhead / .doc-footer below) —
        WeasyPrint renders @top-center/@bottom-left content inside the page
        margin box, so the margin itself must be tall enough to fit it. Top
-       margin sized for the larger logo below (40px + padding). */
-    margin: 4.2cm 1.8cm 2.6cm 1.8cm;
+       margin sized for the larger logo below (60px + padding). */
+    margin: 5cm 1.8cm 2.6cm 1.8cm;
     @top-center {
       content: element(pageHeader);
     }
@@ -64,11 +64,14 @@
      normal document flow, so it's placed near the top of <body> purely for
      source readability. */
   .letterhead { position: running(pageHeader); }
-  .letterhead-table { width: 100%; border-collapse: collapse; border-bottom: 2pt solid #0059ab; }
-  .letterhead-table td { border: none; padding: 0 0 10px 0; vertical-align: middle; }
-  .letterhead-logo img { height: 40px; }
-  .letterhead-logo .wordmark { font-size: 22pt; font-weight: 800; color: #0059ab; letter-spacing: 0.3px; }
-  .letterhead-tagline { text-align: right; font-size: 9.5pt; color: #666; }
+  .letterhead-table { width: 100%; border-collapse: collapse; border-bottom: 2.5pt solid #0059ab; table-layout: fixed; }
+  .letterhead-table td { border: none; padding: 0 0 14px 0; vertical-align: middle; }
+  /* 1:4 / 3:4 split the user asked for — logo column fixed to a quarter of
+     the header width, description column takes the rest. */
+  .letterhead-logo { width: 25%; }
+  .letterhead-logo img { height: 60px; max-width: 100%; width: auto; }
+  .letterhead-logo .wordmark { font-size: 30pt; font-weight: 800; color: #0059ab; letter-spacing: 0.3px; }
+  .letterhead-tagline { width: 75%; text-align: right; font-size: 12pt; color: #666; }
 
   /* Running footer (brand strip) — page-number counter stays a separate
      @bottom-right box since content: on a margin box can't mix an element()
