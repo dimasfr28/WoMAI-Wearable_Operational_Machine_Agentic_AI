@@ -47,37 +47,37 @@ function EarlyWarningCard({ item }: { item: EarlyWarningItem }) {
   return (
     <Card
       className={cn(
-        "border py-4",
+        "border py-5",
         item.isAnomaly
           ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
           : "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30",
       )}
     >
-      <CardContent className="flex items-center gap-3 px-4">
+      <CardContent className="flex items-center gap-4 px-5">
         <div
           className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-full",
+            "flex size-12 shrink-0 items-center justify-center rounded-full",
             item.isAnomaly
               ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
               : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400",
           )}
         >
-          <Icon className="size-4" />
+          <Icon className="size-6" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-muted-foreground">
+          <p className="truncate text-sm font-medium text-muted-foreground">
             {item.parameterLabel}
           </p>
           <p
             className={cn(
-              "text-lg font-bold tabular-nums",
+              "text-2xl font-bold tabular-nums",
               item.isAnomaly
                 ? "text-red-700 dark:text-red-400"
                 : "text-emerald-700 dark:text-emerald-400",
             )}
           >
             {item.currentValue}{" "}
-            <span className="text-xs font-normal text-muted-foreground">
+            <span className="text-sm font-normal text-muted-foreground">
               {item.unit}
             </span>
           </p>
@@ -98,26 +98,26 @@ function PredictionCard({ report }: { report: ReportData }) {
           : "border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-50/60 dark:border-emerald-900 dark:from-emerald-950/40 dark:to-emerald-950/10",
       )}
     >
-      <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-4">
+      <CardContent className="flex flex-col gap-5 py-7 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-5">
           <div
             className={cn(
-              "flex size-12 shrink-0 items-center justify-center rounded-full",
+              "flex size-16 shrink-0 items-center justify-center rounded-full",
               failed
                 ? "bg-red-100 dark:bg-red-900/50"
                 : "bg-emerald-100 dark:bg-emerald-900/50",
             )}
           >
             {failed ? (
-              <AlertTriangle className="size-6 text-red-600 dark:text-red-400" />
+              <AlertTriangle className="size-8 text-red-600 dark:text-red-400" />
             ) : (
-              <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400" />
+              <CheckCircle2 className="size-8 text-emerald-600 dark:text-emerald-400" />
             )}
           </div>
           <div>
             <p
               className={cn(
-                "text-lg font-bold",
+                "text-2xl font-bold",
                 failed
                   ? "text-red-700 dark:text-red-400"
                   : "text-emerald-700 dark:text-emerald-400",
@@ -125,19 +125,19 @@ function PredictionCard({ report }: { report: ReportData }) {
             >
               {failed ? "Failure Predicted" : "Healthy"}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               Machine health prediction based on the latest data recorded at{" "}
               {formatTimestamp(report.sensor.readingTimestamp)}
             </p>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-6 self-end sm:self-auto">
+        <div className="flex shrink-0 items-center gap-10 self-end sm:self-auto">
           <div className="flex flex-col items-end gap-1">
-            <span className="text-xs text-muted-foreground">Failure Risk</span>
+            <span className="text-sm text-muted-foreground">Failure Risk</span>
             <span
               className={cn(
-                "text-2xl font-bold tabular-nums",
+                "text-4xl font-bold tabular-nums",
                 failed
                   ? "text-red-700 dark:text-red-400"
                   : "text-emerald-700 dark:text-emerald-400",
@@ -148,14 +148,14 @@ function PredictionCard({ report }: { report: ReportData }) {
           </div>
           {report.horizonPrediction && (
             <>
-              <div className="h-10 w-px bg-border" />
+              <div className="h-14 w-px bg-border" />
               <div className="flex flex-col items-end gap-1">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   Failure in +{report.horizonPrediction.horizonMinutes} Minute
                 </span>
                 <span
                   className={cn(
-                    "text-2xl font-bold tabular-nums",
+                    "text-4xl font-bold tabular-nums",
                     failed
                       ? "text-red-700 dark:text-red-400"
                       : "text-emerald-700 dark:text-emerald-400",
@@ -203,25 +203,31 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
   }, [load]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto p-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 overflow-y-auto p-8">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="relative size-11 shrink-0 overflow-hidden rounded-xl">
+        <div className="flex items-center gap-4">
+          <div className="relative size-14 shrink-0 overflow-hidden rounded-xl">
             <Image
               src="/images/logo_womai_1x1.png"
               alt="WO.M.AI Logo"
               fill
-              sizes="44px"
+              sizes="56px"
               className="object-cover"
             />
           </div>
           <div>
-            <h1 className="text-xl font-bold">Machine Diagnosis</h1>
-            <p className="text-sm text-muted-foreground">{machine.name}</p>
+            <h1 className="text-2xl font-bold">Machine Diagnosis</h1>
+            <p className="text-base text-muted-foreground">{machine.name}</p>
           </div>
         </div>
-        <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-          <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+        <Button
+          variant="outline"
+          size="icon"
+          className="size-11"
+          onClick={load}
+          disabled={loading}
+        >
+          <RefreshCw className={cn("size-5", loading && "animate-spin")} />
           <span className="sr-only">Refresh</span>
         </Button>
       </div>
@@ -238,8 +244,8 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
 
           {status && status.earlyWarning.length > 0 && (
             <div>
-              <h2 className="mb-2 text-base font-bold">AI Early Warning</h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <h2 className="mb-3 text-xl font-bold">AI Early Warning</h2>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {status.earlyWarning.map((item) => (
                   <EarlyWarningCard key={item.parameter} item={item} />
                 ))}
@@ -247,32 +253,32 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <Card className="relative overflow-hidden">
               <Brain
-                className="pointer-events-none absolute -right-6 -bottom-6 size-40 text-blue-100 dark:text-blue-950/60"
+                className="pointer-events-none absolute -right-8 -bottom-8 size-56 text-blue-100 dark:text-blue-950/60"
                 strokeWidth={1}
               />
-              <CardContent className="relative flex flex-col gap-4 text-sm">
-                <p className="flex items-center gap-2 text-base font-bold">
-                  <Brain className="size-5 text-blue-600 dark:text-blue-400" />
+              <CardContent className="relative flex flex-col gap-5 text-base">
+                <p className="flex items-center gap-2 text-xl font-bold">
+                  <Brain className="size-6 text-blue-600 dark:text-blue-400" />
                   AI Diagnosis
                 </p>
                 <div>
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  <p className="mb-1.5 text-sm font-medium text-muted-foreground">
                     Primary Contributing Factor
                   </p>
-                  <span className="inline-block w-fit rounded-md bg-blue-50 px-2.5 py-1 font-mono text-sm font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
+                  <span className="inline-block w-fit rounded-md bg-blue-50 px-3 py-1.5 font-mono text-base font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
                     {report.shap.features[0]?.featureName ?? "-"}
                   </span>
                 </div>
                 <div>
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  <p className="mb-1.5 text-sm font-medium text-muted-foreground">
                     Health Score
                   </p>
-                  <p className="text-5xl font-bold tabular-nums">
+                  <p className="text-7xl font-bold tabular-nums">
                     {Math.round(report.prediction.healthScore)}
-                    <span className="text-lg font-normal text-muted-foreground">
+                    <span className="text-xl font-normal text-muted-foreground">
                       /100
                     </span>
                   </p>
@@ -281,27 +287,27 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
             </Card>
 
             <Card>
-              <CardContent className="flex flex-col gap-3 text-sm">
-                <p className="flex items-center gap-2 text-base font-bold">
-                  <Sparkles className="size-5 text-blue-600 dark:text-blue-400" />
+              <CardContent className="flex flex-col gap-4 text-base">
+                <p className="flex items-center gap-2 text-xl font-bold">
+                  <Sparkles className="size-6 text-blue-600 dark:text-blue-400" />
                   AI Explanation
                 </p>
                 {report.recommendedAction && (
-                  <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/40">
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-950/40">
+                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">
                       KNN Delta ({report.recommendedAction.feature})
                     </p>
-                    <p className="flex items-center gap-2 font-semibold tabular-nums text-blue-700 dark:text-blue-400">
+                    <p className="flex items-center gap-2 text-lg font-semibold tabular-nums text-blue-700 dark:text-blue-400">
                       {report.recommendedAction.currentValue}
                       <span aria-hidden="true">→</span>
                       {report.recommendedAction.targetValue}
                     </p>
                   </div>
                 )}
-                <div className="flex gap-2 rounded-lg bg-orange-50 p-3 dark:bg-orange-950/30">
-                  <CircleAlert className="mt-0.5 size-4 shrink-0 text-orange-600 dark:text-orange-400" />
+                <div className="flex gap-3 rounded-lg bg-orange-50 p-4 dark:bg-orange-950/30">
+                  <CircleAlert className="mt-0.5 size-5 shrink-0 text-orange-600 dark:text-orange-400" />
                   <div>
-                    <p className="font-semibold text-orange-700 dark:text-orange-400">
+                    <p className="text-base font-semibold text-orange-700 dark:text-orange-400">
                       Cause Analysis
                     </p>
                     <p className="text-muted-foreground">
@@ -309,10 +315,10 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2 rounded-lg bg-blue-50 p-3 dark:bg-blue-950/40">
-                  <Wrench className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                <div className="flex gap-3 rounded-lg bg-blue-50 p-4 dark:bg-blue-950/40">
+                  <Wrench className="mt-0.5 size-5 shrink-0 text-blue-600 dark:text-blue-400" />
                   <div>
-                    <p className="font-semibold text-blue-700 dark:text-blue-400">
+                    <p className="text-base font-semibold text-blue-700 dark:text-blue-400">
                       Suggestions for Improvement
                     </p>
                     <p className="text-muted-foreground">
@@ -325,8 +331,8 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
           </div>
 
           {report.horizonPrediction && (
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="size-3.5" />
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Clock className="size-4" />
               Horizon model version {report.horizonPrediction.modelVersion} ·
               threshold {(report.horizonPrediction.threshold * 100).toFixed(1)}%
             </p>
