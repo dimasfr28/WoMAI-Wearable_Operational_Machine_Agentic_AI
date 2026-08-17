@@ -123,7 +123,7 @@ function PredictionCard({ report }: { report: ReportData }) {
                   : "text-emerald-700 dark:text-emerald-400",
               )}
             >
-              {failed ? "Failure Predicted" : "No Failure Predicted"}
+              {failed ? "Failure Predicted" : "Healthy"}
             </p>
             <p className="text-sm text-muted-foreground">
               Machine health prediction based on the latest data recorded at{" "}
@@ -268,11 +268,11 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-medium text-muted-foreground">
-                    Probability
+                    Health Score
                   </p>
-                  <p className="text-3xl font-bold tabular-nums">
-                    {(report.prediction.failureProbability * 100).toFixed(0)}
-                    <span className="text-base font-normal text-muted-foreground">
+                  <p className="text-5xl font-bold tabular-nums">
+                    {Math.round(report.prediction.healthScore)}
+                    <span className="text-lg font-normal text-muted-foreground">
                       /100
                     </span>
                   </p>
