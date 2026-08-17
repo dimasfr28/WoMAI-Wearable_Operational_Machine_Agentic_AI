@@ -20,9 +20,20 @@ logger = logging.getLogger(__name__)
 _SEND_MESSAGE_URL = "https://api.telegram.org/bot{token}/sendMessage"
 
 
-def notify_new_reading(machine_name: str, pred_result: ClasificationResult) -> None:
+def notify_new_reading(
+    machine_name: str,
+    pred_result: ClasificationResult,
+    horizon_probability: float | None = None,
+    horizon_minutes: int | None = None,
+) -> None:
     """Fire-and-forget: never raises, so a Telegram outage can never break
-    sensor ingestion. No-op if either config value is unset."""
+    sensor ingestion. No-op if either config value is unset.
+
+    horizon_probability/horizon_minutes come from the separate "Probability
+    Failure in +N Minute" model (_run_report_pipeline's horizon_result) —
+    optional because that pipeline step can fail independently of the main
+    classification (see routes_report.py's own try/except around it), so
+    callers may not always have it available yet when they call this."""
     if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
         return
 
@@ -31,6 +42,8 @@ def notify_new_reading(machine_name: str, pred_result: ClasificationResult) -> N
         text = f"⚠️ {machine_name} — FAILURE diprediksi ({probability_pct:.1f}%)"
     else:
         text = f"✅ {machine_name} — Normal ({probability_pct:.1f}%)"
+    if horizon_probability is not None:
+        text += f"\nFailure in +{horizon_minutes or 10} Minute: {horizon_probability * 100:.1f}%"
 
     url = _SEND_MESSAGE_URL.format(token=settings.TELEGRAM_BOT_TOKEN)
     try:

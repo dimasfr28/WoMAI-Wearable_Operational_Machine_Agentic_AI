@@ -255,10 +255,15 @@ def _run_predict(db: Session, user: User, intent_data: dict, sops: list[Sop]):
     db.refresh(reading)
     _bump_failure_count_if_needed(db, run, pred_result.label)
 
-    machine = db.query(Machine).filter(Machine.id == machine_id).first()
-    notify_new_reading(machine.name if machine else "Unknown Machine", pred_result)
-
     report = _run_report_pipeline(db, reading, pred_result, machine_id)
+
+    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    notify_new_reading(
+        machine.name if machine else "Unknown Machine",
+        pred_result,
+        horizon_probability=report.horizon_prediction.failure_probability if report.horizon_prediction else None,
+        horizon_minutes=report.horizon_prediction.horizon_minutes if report.horizon_prediction else None,
+    )
 
     yield {"type": "prediction", "data": _prediction_to_event_data(report.prediction)}
     yield {"type": "shap", "data": _shap_to_event_data(report.shap)}
