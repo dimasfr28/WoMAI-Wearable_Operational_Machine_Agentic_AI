@@ -283,10 +283,13 @@ class FinalReport(Base):
 
 class MachineReport(Base):
     """Machine Report — formal PDF report (rancangan.txt Section 7), one row
-    per generated PDF. Rendered once per sensor reading alongside FinalReport
-    (see app/reports/report_pdf.py), stored on disk under a per-day folder
-    scheme (app/reports/generator.py's report_dir()), referenced here by
-    relative path so the physical layout can change without a migration."""
+    per sensor run (see run_id below), not per reading: the PDF is
+    regenerated and overwritten in place for later readings within the same
+    still-open run, and a new row/file is only created once a new run
+    starts. Rendered alongside FinalReport (see app/reports/report_pdf.py),
+    stored on disk under a per-day folder scheme (app/reports/generator.py's
+    report_dir()), referenced here by relative path so the physical layout
+    can change without a migration."""
 
     __tablename__ = "machine_reports"
 
