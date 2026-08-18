@@ -52,6 +52,19 @@ class AtomicWritePdfTestCase(unittest.TestCase):
         tmp_path = self.output_path.with_name(self.output_path.name + ".tmp")
         self.assertFalse(tmp_path.exists())
 
+    def test_failed_replace_leaves_the_previous_file_untouched(self):
+        _atomic_write_pdf("<html><body>Version A</body></html>", self.output_path)
+        original_bytes = self.output_path.read_bytes()
+
+        with patch("app.reports.report_pdf.os.replace") as mock_replace:
+            mock_replace.side_effect = PermissionError("boom")
+            with self.assertRaises(PermissionError):
+                _atomic_write_pdf("<html><body>Version B</body></html>", self.output_path)
+
+        self.assertEqual(self.output_path.read_bytes(), original_bytes)
+        tmp_path = self.output_path.with_name(self.output_path.name + ".tmp")
+        self.assertFalse(tmp_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
