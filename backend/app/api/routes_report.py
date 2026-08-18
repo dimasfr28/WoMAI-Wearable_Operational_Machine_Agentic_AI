@@ -99,13 +99,14 @@ def _historical_df(db: Session, machine_id: str, limit: int = 5000) -> pd.DataFr
 
 
 def _generate_machine_report_pdf(
-    db: Session, machine_id: str, prediction: Prediction, report_out: ReportOut
+    db: Session, machine_id: str, run_id: str | None, prediction: Prediction, report_out: ReportOut
 ) -> None:
-    """Machine Report PDF (rancangan.txt Section 7) — dipanggil sekali di
-    akhir _run_report_pipeline, setiap data sensor baru masuk (sesuai
-    permintaan "setiap data databaru masuk maka lsng dibuatkan report").
-    Kegagalan di sini TIDAK boleh menggagalkan pipeline prediksi/report utama
-    — caller membungkus panggilan ini dengan try/except."""
+    """Machine Report PDF (rancangan.txt Section 7) — one row/file per run,
+    not per reading: the first reading of a run creates the report, every
+    later reading in that same still-open run overwrites the same file/row
+    in place. Called once at the end of _run_report_pipeline, every time a
+    new sensor reading comes in. Failure here must NOT fail the main
+    prediction/report pipeline — the caller wraps this call in try/except."""
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     machine_name = machine.name if machine else "CNC Machine"
 
@@ -128,17 +129,19 @@ def _generate_machine_report_pdf(
         ),
     )
 
-    # Condition Log (section 6) — riwayat kondisi mesin ini, dari predictions
-    # terakhir (limit 10 baris terbaru, cukup untuk "periode pengamatan"
-    # tanpa membuat laporan PDF membengkak).
+    # Condition Log (section 6) — this run's own readings only (not
+    # cross-run history), so the PDF's log matches "1 PDF = 1 run". Capped
+    # at 50 rows so a very long-running run doesn't produce an unbounded
+    # table.
     history_rows = (
         db.query(Prediction, SensorReading)
         .join(SensorReading, Prediction.sensor_reading_id == SensorReading.id)
-        .join(SensorRun, SensorRun.id == SensorReading.run_id)
-        .filter(SensorRun.machine_id == machine_id)
-        .order_by(Prediction.created_at.desc())
-        .limit(10)
+        .filter(SensorReading.run_id == run_id)
+        .order_by(SensorReading.reading_timestamp.asc())
+        .limit(50)
         .all()
+        if run_id is not None
+        else []
     )
     condition_log = [
         ConditionLogRow(
@@ -153,9 +156,25 @@ def _generate_machine_report_pdf(
         for pred, reading in history_rows
     ]
 
-    report_date = report_folder.today_utc()
-    report_number = report_folder.next_report_number(db, machine_id, report_date)
-    output_path = report_folder.report_path(machine_id, report_date, report_number)
+    # Upsert by run_id: reuse the existing report's number/file if this run
+    # already has one (a later reading in the same still-open run), otherwise
+    # allocate a fresh report_number/file_path (this run's first reading).
+    # run_id is guarded against None explicitly — matching against
+    # `MachineReport.run_id == None` would otherwise collide with legacy
+    # rows created before this column existed.
+    existing_report: MachineReport | None = (
+        db.query(MachineReport).filter(MachineReport.run_id == run_id).first()
+        if run_id is not None
+        else None
+    )
+
+    if existing_report is not None:
+        report_number = existing_report.report_number
+        output_path = report_folder.resolve(existing_report.file_path)
+    else:
+        report_date = report_folder.today_utc()
+        report_number = report_folder.next_report_number(db, machine_id, report_date)
+        output_path = report_folder.report_path(machine_id, report_date, report_number)
 
     render_machine_report_pdf(
         machine_id=machine_id,
@@ -167,14 +186,20 @@ def _generate_machine_report_pdf(
         output_path=output_path,
     )
 
-    machine_report = MachineReport(
-        machine_id=machine_id,
-        prediction_id=prediction.id,
-        report_number=report_number,
-        file_path=report_folder.relative_path(machine_id, report_date, report_number),
-        operating_status=operating_status,
-    )
-    db.add(machine_report)
+    if existing_report is not None:
+        existing_report.prediction_id = prediction.id
+        existing_report.operating_status = operating_status
+        db.add(existing_report)
+    else:
+        machine_report = MachineReport(
+            machine_id=machine_id,
+            run_id=run_id,
+            prediction_id=prediction.id,
+            report_number=report_number,
+            file_path=report_folder.relative_path(machine_id, report_date, report_number),
+            operating_status=operating_status,
+        )
+        db.add(machine_report)
     db.commit()
 
 
@@ -509,7 +534,7 @@ def _run_report_pipeline(
     )
 
     try:
-        _generate_machine_report_pdf(db, machine_id, prediction, report_out)
+        _generate_machine_report_pdf(db, machine_id, sensor_reading.run_id, prediction, report_out)
     except Exception:
         logger.exception("_run_report_pipeline: Machine Report PDF generation failed")
 
