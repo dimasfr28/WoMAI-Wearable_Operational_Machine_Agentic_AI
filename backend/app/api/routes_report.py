@@ -31,6 +31,7 @@ from app.ml.predictor_horizon import get_model_bundle as get_horizon_bundle
 from app.ml.predictor_horizon import predict_failure_horizon
 from app.ml.shap_tool import explain_failure_shap
 from app.rag.crag_graph import extract_part_names, generate_search_queries, run_crag, summarize_cause_analysis
+from app.rag.judge import evaluate_faithfulness
 from app.rag.final_report import (
     EarlyWarningContext,
     FinalReportContext,
@@ -390,6 +391,18 @@ def _run_report_pipeline(
                 "documents": [],
                 "part_name": None,
             }
+
+        faithfulness_score = evaluate_faithfulness(
+            query=query_text,
+            answer=crag_state["answer"],
+            contexts=[d.page_content for d in crag_state.get("documents", [])],
+        )
+        logger.info(
+            "ragas_faithfulness score=%s machine_id=%s prediction_id=%s",
+            faithfulness_score,
+            machine_id,
+            prediction.id,
+        )
 
         retrieved_ids = [
             d.metadata.get("postgres_chunk_id")
