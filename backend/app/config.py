@@ -28,9 +28,15 @@ class Settings(BaseSettings):
     # --- MinerU (PDF -> Markdown parsing service) ---
     MINERU_SERVICE_URL: str = "http://mineru-service:8000"
 
-    # --- Groq LLM ---
+    # --- Groq LLM (kept installed/importable as a fallback reference —
+    # app.llm.groq_client is no longer imported by any call site; see
+    # app.llm.gemini_client, the active provider) ---
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # --- Gemini LLM (active provider) ---
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
 
     # --- Model ML ---
     # Klasifikasi biner "gagal sekarang" (rancangan.txt Section 5, "Failure

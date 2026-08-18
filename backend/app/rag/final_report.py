@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 
 from app.config import settings
-from app.llm.groq_client import chat, chat_json
+from app.llm.gemini_client import chat, chat_json
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ def generate_final_report(context: FinalReportContext) -> str:
         part_price=context.part_price or "(no part price data)",
     )
     try:
-        return chat([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL, temperature=0.3)
+        return chat([{"role": "user", "content": prompt}], model=settings.GEMINI_MODEL, temperature=0.3)
     except Exception:
         logger.exception("generate_final_report: Groq call failed")
         return (
@@ -133,7 +133,7 @@ def generate_early_warning_narrative(context: EarlyWarningContext) -> dict:
         recommendation_text=recommendation_text,
     )
     try:
-        raw = chat_json([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL)
+        raw = chat_json([{"role": "user", "content": prompt}], model=settings.GEMINI_MODEL)
         data = json.loads(raw)
         return {
             "ai_explanation": data.get("ai_explanation") or "",
@@ -185,7 +185,7 @@ def generate_suggestion_general(feature_name: str, direction: str) -> str:
     general_term = _SHAP_FEATURE_TO_GENERAL_TERM.get(feature_name, feature_name)
     prompt = SUGGESTION_GENERAL_PROMPT.format(general_term=general_term, direction=direction)
     try:
-        return chat([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL, temperature=0.2).strip()
+        return chat([{"role": "user", "content": prompt}], model=settings.GEMINI_MODEL, temperature=0.2).strip()
     except Exception:
         logger.exception("generate_suggestion_general: Groq call failed")
         verb = "Increase" if direction == "increase" else "Decrease"
@@ -246,7 +246,7 @@ def generate_what_if_narrative(context: WhatIfContext) -> str:
         top_feature=context.top_feature_name,
     )
     try:
-        return chat([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL, temperature=0.3)
+        return chat([{"role": "user", "content": prompt}], model=settings.GEMINI_MODEL, temperature=0.3)
     except Exception:
         logger.exception("generate_what_if_narrative: Groq call failed")
         if context.baseline_probability is not None:
