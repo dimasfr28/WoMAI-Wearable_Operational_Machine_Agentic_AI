@@ -136,10 +136,10 @@ def _atomic_write_pdf(html_str: str, output_path: Path) -> None:
     tmp_path = output_path.with_name(output_path.name + ".tmp")
     try:
         HTML(string=html_str).write_pdf(str(tmp_path))
+        os.replace(tmp_path, output_path)
     except Exception:
         tmp_path.unlink(missing_ok=True)
         raise
-    os.replace(tmp_path, output_path)
 
 
 def render_machine_report_pdf(
