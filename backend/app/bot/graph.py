@@ -22,7 +22,7 @@ from app.bot.tools import (
     list_machines_tool,
 )
 from app.db.models import Machine
-from app.llm.groq_client import chat, chat_json
+from app.llm.gemini_client import chat, chat_json
 
 logger = logging.getLogger(__name__)
 

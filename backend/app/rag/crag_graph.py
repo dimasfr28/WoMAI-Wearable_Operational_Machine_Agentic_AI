@@ -11,7 +11,7 @@ from typing import Literal, TypedDict
 
 from langgraph.graph import StateGraph, END
 
-from app.llm.groq_client import chat, chat_json
+from app.llm.gemini_client import chat, chat_json
 from app.ml.outlier import RunIqrBounds, is_value_outlier
 from app.rag.grader import grade_documents
 from app.rag.part_price_search import searxng_search
