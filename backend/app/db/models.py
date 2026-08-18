@@ -302,8 +302,21 @@ class MachineReport(Base):
     report_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     # Relative to REPORTS_DIR (settings) — "<machine_id>/<YYYY-MM-DD>/<report_number>.pdf".
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    # One row per sensor_runs row (not per reading) — see
+    # docs/superpowers/specs/2026-08-18-run-clustering-and-report-design.md.
+    # Unique + nullable: every row created going forward always has run_id
+    # set (a reading is never processed without an assigned run), but
+    # historical rows predating this column keep run_id=NULL, which the
+    # unique constraint permits any number of (NULL is never "equal" to
+    # another NULL for uniqueness purposes).
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sensor_runs.id", ondelete="SET NULL"), nullable=True, index=True, unique=True
+    )
     operating_status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 # ---------------------------------------------------------------------------
