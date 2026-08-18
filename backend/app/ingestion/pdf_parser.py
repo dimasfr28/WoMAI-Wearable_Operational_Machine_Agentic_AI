@@ -71,13 +71,12 @@ def parse_pdf_to_markdown(file_bytes: bytes, filename: str, language: str = "en"
             )
         except MineruClientError as exc:
             logger.exception("parse_pdf_to_markdown: mineru-service failed to parse %s", filename)
-            raise PdfParsingFailed(f"MinerU gagal memparsing '{filename}': {exc}") from exc
+            raise PdfParsingFailed(f"MinerU failed to parse '{filename}': {exc}") from exc
 
         md_files = sorted(output_dir.rglob(f"{pdf_path.stem}*.md"))
         if not md_files:
             raise PdfParsingFailed(
-                f"MinerU tidak menghasilkan file markdown untuk '{filename}' "
-                "(kemungkinan file PDF kosong/corrupt atau tidak berisi konten "
-                "yang bisa diekstrak)."
+                f"MinerU produced no markdown output for '{filename}' "
+                "(the PDF may be empty/corrupt or contain no extractable content)."
             )
         return md_files[0].read_text(encoding="utf-8")

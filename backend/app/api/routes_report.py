@@ -573,13 +573,13 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
             is not None
         )
         if not has_any_reading:
-            raise HTTPException(status_code=404, detail="Belum ada data sensor. Input data sensor terlebih dahulu.")
+            raise HTTPException(status_code=404, detail="No sensor data yet. Submit sensor data first.")
         raise HTTPException(
             status_code=404,
             detail=(
-                "Report belum tersedia — reading terbaru masih diproses "
-                "(SHAP/KNN/CRAG/LLM) dan belum ada report lengkap sebelumnya "
-                "untuk mesin ini. Coba lagi sebentar."
+                "Report not ready yet — the latest reading is still being processed "
+                "(SHAP/KNN/CRAG/LLM) and there is no complete previous report "
+                "for this machine yet. Please try again shortly."
             ),
         )
     sensor_reading, prediction, final_report = row
