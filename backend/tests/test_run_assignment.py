@@ -6,95 +6,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import create_engine
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PG_UUID
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-
-@compiles(JSONB, "sqlite")
-def compile_jsonb_sqlite(type_, compiler, **kw):
-    return "JSON"
-
-
-@compiles(ARRAY, "sqlite")
-def compile_array_sqlite(type_, compiler, **kw):
-    return "TEXT"
-
-
-@compiles(PG_UUID, "sqlite")
-def compile_uuid_sqlite(type_, compiler, **kw):
-    return "CHAR(36)"
-
-
-# NOTE — deviation from the task-1 brief's verbatim test listing, added to make
-# this file runnable at all; see task-1-report.md "Issues or concerns" for the
-# full justification. The three @compiles overrides above only affect DDL
-# rendering under sqlite. At the Python-value bind level, SQLAlchemy's Uuid
-# type (postgresql.UUID subclasses it) still requires an actual uuid.UUID
-# instance whenever the dialect lacks native UUID support (sqlite) and
-# as_uuid=True (true for every UUID column in app.db.models) — it
-# unconditionally calls value.hex. assign_run_id/_open_new_run filter/create
-# rows using machine_id as a plain str (their pre-existing, unchanged-by-this-
-# task signature), which works fine against real PostgreSQL (the native
-# driver accepts string literals for UUID columns) but raises AttributeError
-# under this sqlite in-memory test unless plain strings are coerced to
-# uuid.UUID first. This patches postgresql.UUID's bind processor, for the
-# sqlite dialect only, to accept both.
-_pg_uuid_bind_processor = PG_UUID.bind_processor
-
-
-def _sqlite_tolerant_uuid_bind_processor(self, dialect):
-    processor = _pg_uuid_bind_processor(self, dialect)
-    if processor is None or dialect.name != "sqlite":
-        return processor
-
-    def process(value):
-        if isinstance(value, str):
-            value = uuid.UUID(value)
-        return processor(value)
-
-    return process
-
-
-PG_UUID.bind_processor = _sqlite_tolerant_uuid_bind_processor
-
-
-# NOTE — second deviation, same reason as above: DateTime(timezone=True)
-# columns (e.g. SensorReading.reading_timestamp) round-trip through SQLite as
-# naive datetimes — SQLite has no native tz-aware datetime storage, and the
-# sqlite dialect's own DATETIME type (sqlalchemy.dialects.sqlite.base.DATETIME,
-# which generic DateTime is mapped to under this dialect) always parses the
-# stored string to a naive datetime, ignoring `timezone=True` entirely.
-# assign_run_id's new same-run rule (Step 4) subtracts `new_reading.timestamp`
-# (tz-aware, built directly by the test/pydantic, never touches the DB) from
-# `last_reading.reading_timestamp` (tz-aware going in, naive coming back out
-# of SQLite), which raises `TypeError: can't subtract offset-naive and
-# offset-aware datetimes`. Against real PostgreSQL, TIMESTAMPTZ columns
-# preserve tz-awareness on retrieval, so this never happens in production.
-# Every timestamp in this app and this test is UTC, so reattaching UTC tzinfo
-# to a naive value read back from sqlite is safe here.
-from sqlalchemy.dialects.sqlite.base import DATETIME as _SQLITE_DATETIME
-
-_sqlite_dt_result_processor = _SQLITE_DATETIME.result_processor
-
-
-def _sqlite_tz_aware_result_processor(self, dialect, coltype):
-    processor = _sqlite_dt_result_processor(self, dialect, coltype)
-    if not self.timezone:
-        return processor
-
-    def process(value):
-        value = processor(value) if processor else value
-        if value is not None and value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value
-
-    return process
-
-
-_SQLITE_DATETIME.result_processor = _sqlite_tz_aware_result_processor
-
+import tests.sqlite_compat  # noqa: F401
 
 from app.api.routes_sensor import assign_run_id
 from app.config import settings
