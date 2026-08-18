@@ -17,6 +17,6 @@ describe("deriveTitle", () => {
   });
 
   it("fallback untuk teks kosong", () => {
-    expect(deriveTitle("   ")).toBe("Percakapan baru");
+    expect(deriveTitle("   ")).toBe("New conversation");
   });
 });

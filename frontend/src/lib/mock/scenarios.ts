@@ -25,23 +25,23 @@ export interface ManualParams {
   toolWear: number;
 }
 
-export const MANUAL_PREFIX = "Input manual parameter mesin";
+export const MANUAL_PREFIX = "Manual machine parameter input";
 
 export function formatManualMessage(p: ManualParams): string {
   return (
-    `${MANUAL_PREFIX} - Tipe: ${p.type}, Suhu udara: ${p.airTemp} K, ` +
-    `Suhu proses: ${p.processTemp} K, Kecepatan putar: ${p.rpm} rpm, ` +
-    `Torsi: ${p.torque} Nm, Tool wear: ${p.toolWear} min`
+    `${MANUAL_PREFIX} - Type: ${p.type}, Air temp: ${p.airTemp} K, ` +
+    `Process temp: ${p.processTemp} K, Rotational speed: ${p.rpm} rpm, ` +
+    `Torque: ${p.torque} Nm, Tool wear: ${p.toolWear} min`
   );
 }
 
 export function parseManualInput(text: string): ManualParams | null {
   if (!text.startsWith(MANUAL_PREFIX)) return null;
-  const type = /Tipe:\s*([LMH])/.exec(text)?.[1];
-  const airTemp = /Suhu udara:\s*([\d.]+)/.exec(text)?.[1];
-  const processTemp = /Suhu proses:\s*([\d.]+)/.exec(text)?.[1];
-  const rpm = /Kecepatan putar:\s*([\d.]+)/.exec(text)?.[1];
-  const torque = /Torsi:\s*([\d.]+)/.exec(text)?.[1];
+  const type = /Type:\s*([LMH])/.exec(text)?.[1];
+  const airTemp = /Air temp:\s*([\d.]+)/.exec(text)?.[1];
+  const processTemp = /Process temp:\s*([\d.]+)/.exec(text)?.[1];
+  const rpm = /Rotational speed:\s*([\d.]+)/.exec(text)?.[1];
+  const torque = /Torque:\s*([\d.]+)/.exec(text)?.[1];
   const toolWear = /Tool wear:\s*([\d.]+)/.exec(text)?.[1];
   if (!type || !airTemp || !processTemp || !rpm || !torque || !toolWear) {
     return null;
@@ -57,10 +57,10 @@ export function parseManualInput(text: string): ManualParams | null {
 }
 
 const KEYWORDS: [ScenarioKey, string[]][] = [
-  ["hdf", ["suhu", "panas", "temperatur", "overheat"]],
-  ["osf", ["torsi", "beban", "overstrain"]],
-  ["twf", ["aus", "tool wear", "pahat"]],
-  ["pwf", ["daya", "listrik", "power"]],
+  ["hdf", ["temperature", "hot", "heat", "overheat"]],
+  ["osf", ["torque", "load", "overstrain"]],
+  ["twf", ["worn", "tool wear", "wear"]],
+  ["pwf", ["power", "electrical", "voltage"]],
 ];
 
 export function pickScenario(input: string): MockScenario {
@@ -83,7 +83,7 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
   hdf: {
     key: "hdf",
     responseText:
-      "Berdasarkan parameter yang kamu sebutkan, model mendeteksi indikasi Heat Dissipation Failure (HDF) dengan probabilitas 87%. Pendorong utamanya adalah suhu proses yang tinggi dan selisih suhu udara-proses yang menyempit, sehingga pembuangan panas tidak efektif. Saya sudah siapkan rencana tindakan di bawah. Prioritaskan langkah berlabel Segera, dan perhatikan estimasi kerugian bila perbaikan ditunda.",
+      "Based on the parameters you described, the model detects signs of Heat Dissipation Failure (HDF) with 87% probability. The main drivers are a high process temperature and a narrowing air-process temperature gap, which makes heat dissipation ineffective. I've prepared an action plan below — prioritize the steps marked Urgent, and note the estimated loss if repairs are delayed.",
     prediction: {
       probability: 0.87,
       label: true,
@@ -92,43 +92,43 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     },
     shap: {
       contributions: [
-        { feature: "Suhu proses [K]", value: 0.34 },
-        { feature: "Selisih suhu udara-proses", value: 0.21 },
-        { feature: "Kecepatan putar [rpm]", value: 0.12 },
-        { feature: "Torsi [Nm]", value: 0.05 },
-        { feature: "Tipe mesin (M)", value: -0.04 },
+        { feature: "Process temperature [K]", value: 0.34 },
+        { feature: "Air-process temperature difference", value: 0.21 },
+        { feature: "Rotational speed [rpm]", value: 0.12 },
+        { feature: "Torque [Nm]", value: 0.05 },
+        { feature: "Machine type (M)", value: -0.04 },
       ],
     },
     sop: {
-      title: "Penanganan Heat Dissipation Failure",
+      title: "Heat Dissipation Failure Handling",
       steps: [
         {
           id: "hdf-1",
-          text: "Turunkan beban mesin ke ≤50% dan pantau tren suhu proses",
+          text: "Reduce machine load to ≤50% and monitor the process temperature trend",
           priority: "segera",
           estimatedMinutes: 10,
         },
         {
           id: "hdf-2",
-          text: "Periksa dan bersihkan sistem pendingin (kipas, heatsink, saluran udara)",
+          text: "Inspect and clean the cooling system (fan, heatsink, air ducts)",
           priority: "segera",
           estimatedMinutes: 15,
         },
         {
           id: "hdf-3",
-          text: "Ukur selisih suhu udara-proses; pastikan kembali di atas 8,6 K",
+          text: "Measure the air-process temperature difference; confirm it's back above 8.6 K",
           priority: "segera",
           estimatedMinutes: 20,
         },
         {
           id: "hdf-4",
-          text: "Inspeksi termal menyeluruh pada bearing dan gearbox",
+          text: "Perform a full thermal inspection of the bearing and gearbox",
           priority: "terjadwal",
           estimatedMinutes: 45,
         },
         {
           id: "hdf-5",
-          text: "Catat kejadian di log maintenance dan jadwalkan pengecekan ulang 24 jam",
+          text: "Log the incident in the maintenance log and schedule a re-check in 24 hours",
           priority: "terjadwal",
           estimatedMinutes: 30,
         },
@@ -146,7 +146,7 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
   osf: {
     key: "osf",
     responseText:
-      "Parameter menunjukkan indikasi Overstrain Failure (OSF) dengan probabilitas 82%. Kombinasi torsi tinggi dan tool wear yang menumpuk membuat beban melewati ambang aman material. Ikuti rencana tindakan di bawah dan kurangi beban sementara sebelum inspeksi.",
+      "The parameters indicate signs of Overstrain Failure (OSF) with 82% probability. The combination of high torque and accumulated tool wear is pushing the load past the material's safe threshold. Follow the action plan below and reduce the load temporarily before inspection.",
     prediction: {
       probability: 0.82,
       label: true,
@@ -155,37 +155,37 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     },
     shap: {
       contributions: [
-        { feature: "Torsi [Nm]", value: 0.38 },
+        { feature: "Torque [Nm]", value: 0.38 },
         { feature: "Tool wear [min]", value: 0.27 },
-        { feature: "Tipe mesin (L)", value: 0.09 },
-        { feature: "Suhu proses [K]", value: -0.05 },
-        { feature: "Kecepatan putar [rpm]", value: -0.08 },
+        { feature: "Machine type (L)", value: 0.09 },
+        { feature: "Process temperature [K]", value: -0.05 },
+        { feature: "Rotational speed [rpm]", value: -0.08 },
       ],
     },
     sop: {
-      title: "Penanganan Overstrain Failure",
+      title: "Overstrain Failure Handling",
       steps: [
         {
           id: "osf-1",
-          text: "Kurangi torsi operasi di bawah ambang aman tipe material",
+          text: "Reduce operating torque below the material type's safe threshold",
           priority: "segera",
           estimatedMinutes: 5,
         },
         {
           id: "osf-2",
-          text: "Inspeksi visual tool dan komponen transmisi dari deformasi",
+          text: "Visually inspect the tool and transmission components for deformation",
           priority: "segera",
           estimatedMinutes: 20,
         },
         {
           id: "osf-3",
-          text: "Ganti tool bila tool wear melebihi 200 menit",
+          text: "Replace the tool if tool wear exceeds 200 minutes",
           priority: "terjadwal",
           estimatedMinutes: 30,
         },
         {
           id: "osf-4",
-          text: "Kalibrasi ulang beban kerja mesin sesuai spesifikasi",
+          text: "Recalibrate the machine's working load to spec",
           priority: "terjadwal",
           estimatedMinutes: 25,
         },
@@ -203,7 +203,7 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
   twf: {
     key: "twf",
     responseText:
-      "Model mendeteksi indikasi Tool Wear Failure (TWF) dengan probabilitas 74%. Tool wear sudah mendekati batas usia pakai sehingga risiko kegagalan meningkat. Jadwalkan penggantian tool sesuai rencana tindakan di bawah.",
+      "The model detects signs of Tool Wear Failure (TWF) with 74% probability. Tool wear is approaching its end-of-life threshold, raising the risk of failure. Schedule a tool replacement per the action plan below.",
     prediction: {
       probability: 0.74,
       label: true,
@@ -213,36 +213,36 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     shap: {
       contributions: [
         { feature: "Tool wear [min]", value: 0.45 },
-        { feature: "Torsi [Nm]", value: 0.11 },
-        { feature: "Tipe mesin (L)", value: 0.06 },
-        { feature: "Suhu proses [K]", value: -0.03 },
-        { feature: "Kecepatan putar [rpm]", value: -0.02 },
+        { feature: "Torque [Nm]", value: 0.11 },
+        { feature: "Machine type (L)", value: 0.06 },
+        { feature: "Process temperature [K]", value: -0.03 },
+        { feature: "Rotational speed [rpm]", value: -0.02 },
       ],
     },
     sop: {
-      title: "Penanganan Tool Wear Failure",
+      title: "Tool Wear Failure Handling",
       steps: [
         {
           id: "twf-1",
-          text: "Hentikan proses pada titik aman berikutnya (akhir siklus)",
+          text: "Stop the process at the next safe point (end of cycle)",
           priority: "segera",
           estimatedMinutes: 10,
         },
         {
           id: "twf-2",
-          text: "Ganti tool dengan unit baru dan reset counter tool wear",
+          text: "Replace the tool with a new unit and reset the tool wear counter",
           priority: "segera",
           estimatedMinutes: 25,
         },
         {
           id: "twf-3",
-          text: "Periksa kualitas output batch terakhir dari cacat",
+          text: "Check the last batch's output quality for defects",
           priority: "terjadwal",
           estimatedMinutes: 15,
         },
         {
           id: "twf-4",
-          text: "Evaluasi interval penggantian tool pada jadwal preventif",
+          text: "Review the tool replacement interval in the preventive maintenance schedule",
           priority: "terjadwal",
           estimatedMinutes: 20,
         },
@@ -260,7 +260,7 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
   pwf: {
     key: "pwf",
     responseText:
-      "Terdeteksi indikasi Power Failure (PWF) dengan probabilitas 69%. Kombinasi kecepatan putar rendah dengan torsi saat ini membuat daya keluar dari rentang operasi aman (3.500-9.000 W). Periksa suplai daya dan parameter operasi sesuai rencana di bawah.",
+      "Signs of Power Failure (PWF) detected with 69% probability. The combination of low rotational speed and the current torque is pushing power outside the safe operating range (3,500-9,000 W). Check the power supply and operating parameters per the plan below.",
     prediction: {
       probability: 0.69,
       label: true,
@@ -269,37 +269,37 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
     },
     shap: {
       contributions: [
-        { feature: "Kecepatan putar [rpm]", value: 0.36 },
-        { feature: "Torsi [Nm]", value: 0.22 },
+        { feature: "Rotational speed [rpm]", value: 0.36 },
+        { feature: "Torque [Nm]", value: 0.22 },
         { feature: "Tool wear [min]", value: 0.04 },
-        { feature: "Suhu proses [K]", value: -0.06 },
-        { feature: "Suhu udara [K]", value: -0.02 },
+        { feature: "Process temperature [K]", value: -0.06 },
+        { feature: "Air temperature [K]", value: -0.02 },
       ],
     },
     sop: {
-      title: "Penanganan Power Failure",
+      title: "Power Failure Handling",
       steps: [
         {
           id: "pwf-1",
-          text: "Periksa suplai daya dan koneksi kelistrikan mesin",
+          text: "Check the machine's power supply and electrical connections",
           priority: "segera",
           estimatedMinutes: 10,
         },
         {
           id: "pwf-2",
-          text: "Verifikasi kecepatan putar dan torsi berada dalam rentang daya 3.500-9.000 W",
+          text: "Verify rotational speed and torque are within the 3,500-9,000 W power range",
           priority: "segera",
           estimatedMinutes: 15,
         },
         {
           id: "pwf-3",
-          text: "Inspeksi motor drive dan inverter dari anomali",
+          text: "Inspect the drive motor and inverter for anomalies",
           priority: "terjadwal",
           estimatedMinutes: 40,
         },
         {
           id: "pwf-4",
-          text: "Jadwalkan pengujian beban penuh setelah normalisasi",
+          text: "Schedule a full-load test after normalization",
           priority: "terjadwal",
           estimatedMinutes: 20,
         },
@@ -317,7 +317,7 @@ export const SCENARIOS: Record<ScenarioKey, MockScenario> = {
   none: {
     key: "none",
     responseText:
-      "Kabar baik: berdasarkan parameter tersebut, mesin diprediksi beroperasi normal dengan probabilitas kegagalan hanya 3%. Tidak ada tindakan darurat yang diperlukan; lanjutkan pemantauan rutin dan pastikan parameter tetap dalam rentang operasi normal.",
+      "Good news: based on those parameters, the machine is predicted to operate normally, with only a 3% failure probability. No emergency action is needed — continue routine monitoring and keep the parameters within the normal operating range.",
     prediction: {
       probability: 0.03,
       label: false,

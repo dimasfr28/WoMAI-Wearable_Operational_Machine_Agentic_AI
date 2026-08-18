@@ -10,18 +10,18 @@ export function DowntimeCard({ data }: { data: DowntimeEstimate }) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          Estimasi Kerugian Downtime
+          Downtime Loss Estimate
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
-          <span>Kerugian per jam</span>
+          <span>Loss per hour</span>
           <span className="font-medium tabular-nums">
             {formatRupiah(data.costPerHourIdr)}
           </span>
         </div>
         <div className="flex justify-between">
-          <span>Perbaikan sekarang (±{data.estimatedRepairHours} jam)</span>
+          <span>Repair now (±{data.estimatedRepairHours} hrs)</span>
           <span className="font-medium tabular-nums">
             {formatRupiah(repairLoss)}
           </span>
@@ -32,7 +32,7 @@ export function DowntimeCard({ data }: { data: DowntimeEstimate }) {
             key={p.delayHours}
             className="flex justify-between text-red-600"
           >
-            <span>Jika ditunda {p.delayHours} jam</span>
+            <span>If delayed {p.delayHours} hrs</span>
             <span className="font-medium tabular-nums">
               +{formatRupiah(p.additionalLossIdr)}
             </span>

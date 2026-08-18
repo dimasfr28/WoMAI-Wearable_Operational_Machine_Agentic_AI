@@ -18,15 +18,15 @@ export async function GET(
       cache: "no-store",
     });
   } catch {
-    return Response.json({ error: "Gagal menghubungi backend." }, { status: 502 });
+    return Response.json({ error: "Failed to reach backend." }, { status: 502 });
   }
 
   if (!resp.ok) {
     if (resp.status === 404) {
-      return Response.json({ error: "Laporan tidak ditemukan." }, { status: 404 });
+      return Response.json({ error: "Report not found." }, { status: 404 });
     }
     return Response.json(
-      { error: `Gagal memuat PDF (${resp.status})` },
+      { error: `Failed to load PDF (${resp.status})` },
       { status: resp.status },
     );
   }

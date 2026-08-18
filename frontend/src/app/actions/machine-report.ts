@@ -28,7 +28,7 @@ export async function getLatestMachineReportAction(
   );
   if (resp.status === 404) return null;
   if (!resp.ok) {
-    throw new Error(`Gagal memuat Machine Report (${resp.status})`);
+    throw new Error(`Failed to load Machine Report (${resp.status})`);
   }
   const data = (await resp.json()) as MachineReportApiOut;
   return fromApi(data);
@@ -42,7 +42,7 @@ export async function listMachineReportsAction(
     { cache: "no-store" },
   );
   if (!resp.ok) {
-    throw new Error(`Gagal memuat riwayat Machine Report (${resp.status})`);
+    throw new Error(`Failed to load Machine Report history (${resp.status})`);
   }
   const data = (await resp.json()) as MachineReportApiOut[];
   return data.map(fromApi);

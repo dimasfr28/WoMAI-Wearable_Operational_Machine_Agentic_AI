@@ -61,7 +61,7 @@ describe("backendFetch", () => {
       vi.fn().mockResolvedValue(new Response(null, { status: 403 })),
     );
     await expect(backendFetch("/machines")).rejects.toThrow(
-      "Aksi ini butuh role engineer atau lebih tinggi.",
+      "This action requires an engineer role or higher.",
     );
   });
 

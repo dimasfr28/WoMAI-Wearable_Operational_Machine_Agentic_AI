@@ -35,7 +35,7 @@ export async function listKnowledgeBaseDocumentsAction(
     { cache: "no-store" },
   );
   if (!resp.ok) {
-    throw new Error(`Gagal memuat dokumen knowledge base (${resp.status})`);
+    throw new Error(`Failed to load knowledge base documents (${resp.status})`);
   }
   const data = (await resp.json()) as DocumentApiOut[];
   return data.map(fromApi);

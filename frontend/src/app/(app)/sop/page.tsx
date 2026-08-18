@@ -29,13 +29,13 @@ import type { KnowledgeBaseDocument, Machine, Sop } from "@/lib/types";
 function statusLabel(status: string): string {
   switch (status) {
     case "completed":
-      return "Selesai";
+      return "Completed";
     case "processing":
-      return "Diproses";
+      return "Processing";
     case "rejected_duplicate":
-      return "Duplikat";
+      return "Duplicate";
     case "failed":
-      return "Gagal";
+      return "Failed";
     default:
       return status;
   }
@@ -52,7 +52,7 @@ function statusBadgeClass(status: string): string {
 }
 
 function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString("id-ID", {
+  return new Date(iso).toLocaleString("en-US", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -74,7 +74,7 @@ function KnowledgeBaseDocuments({ machine }: { machine: Machine }) {
     } catch (err) {
       unstable_rethrow(err);
       toast.error(
-        err instanceof Error ? err.message : "Gagal memuat dokumen manual.",
+        err instanceof Error ? err.message : "Failed to load manual documents.",
       );
     } finally {
       setLoading(false);
@@ -91,10 +91,10 @@ function KnowledgeBaseDocuments({ machine }: { machine: Machine }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-sm font-medium">Dokumen Manual Servis</h2>
+          <h2 className="text-sm font-medium">Service Manual Documents</h2>
           <p className="text-xs text-muted-foreground">
-            Manual/troubleshooting guide {machine.name} yang dipakai sistem
-            untuk analisis root-cause otomatis (RAG).
+            Manual/troubleshooting guide for {machine.name}, used by the
+            system for automatic root-cause analysis (RAG).
           </p>
         </div>
         <Button variant="outline" size="icon" onClick={load} disabled={loading}>
@@ -105,7 +105,7 @@ function KnowledgeBaseDocuments({ machine }: { machine: Machine }) {
 
       {documents.length === 0 && loaded ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          Belum ada dokumen manual untuk mesin ini.
+          No manual documents yet for this machine.
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -119,7 +119,7 @@ function KnowledgeBaseDocuments({ machine }: { machine: Machine }) {
                       {d.originalFilename ?? d.docName}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {d.chunkCount} bagian · {formatTimestamp(d.uploadedAt)}
+                      {d.chunkCount} sections · {formatTimestamp(d.uploadedAt)}
                     </span>
                   </div>
                 </div>
@@ -144,22 +144,22 @@ function SopSection() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-sm font-medium">SOP Terstruktur</h2>
+          <h2 className="text-sm font-medium">Structured SOPs</h2>
           <p className="text-xs text-muted-foreground">
-            Dipakai chatbot untuk merekomendasikan penanganan (tidak terikat
-            mesin tertentu).
+            Used by the chatbot to recommend handling steps (not tied to a
+            specific machine).
           </p>
         </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
-          Tambah SOP
+          Add SOP
         </Button>
       </div>
 
       {sops.length === 0 && !loading ? (
         <div className="flex flex-col items-center gap-4 py-10">
           <FileText className="text-muted-foreground size-10" />
-          <p className="text-muted-foreground text-sm">Belum ada SOP tersimpan.</p>
-          <Button onClick={() => setAddOpen(true)}>Tambah SOP Pertama</Button>
+          <p className="text-muted-foreground text-sm">No SOPs saved yet.</p>
+          <Button onClick={() => setAddOpen(true)}>Add First SOP</Button>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -189,35 +189,35 @@ function SopSection() {
                         render={<Button variant="ghost" size="icon" />}
                       >
                         <Trash2 className="size-4" />
-                        <span className="sr-only">Hapus SOP</span>
+                        <span className="sr-only">Delete SOP</span>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Hapus SOP?</AlertDialogTitle>
+                          <AlertDialogTitle>Delete SOP?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            SOP &quot;{s.title}&quot; akan dihapus dari
-                            knowledge base. Chatbot tidak lagi memakainya
-                            untuk rekomendasi.
+                            SOP &quot;{s.title}&quot; will be deleted from
+                            the knowledge base. The chatbot will no longer
+                            use it for recommendations.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Batal</AlertDialogCancel>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={async () => {
                               try {
                                 await deleteSop(s.id);
-                                toast.success("SOP dihapus.");
+                                toast.success("SOP deleted.");
                               } catch (err) {
                                 unstable_rethrow(err);
                                 toast.error(
                                   err instanceof Error
                                     ? err.message
-                                    : "Gagal menghapus SOP.",
+                                    : "Failed to delete SOP.",
                                 );
                               }
                             }}
                           >
-                            Hapus
+                            Delete
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -226,7 +226,7 @@ function SopSection() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground text-sm">
-                    {s.steps.length} langkah
+                    {s.steps.length} steps
                   </span>
                   {s.reference && (
                     <span className="text-muted-foreground truncate text-xs">
@@ -259,8 +259,8 @@ function KnowledgeBaseContent({ machine }: { machine: Machine }) {
       <div>
         <h1 className="text-xl font-semibold">Knowledge Base</h1>
         <p className="text-muted-foreground text-sm">
-          Dokumen manual servis dan SOP yang dipakai sistem untuk analisis dan
-          rekomendasi penanganan.
+          Service manual documents and SOPs used by the system for analysis
+          and handling recommendations.
         </p>
       </div>
 

@@ -13,6 +13,8 @@ import {
   RefreshCw,
   Sparkles,
   Thermometer,
+  Wifi,
+  WifiOff,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,13 +28,72 @@ import type { EarlyWarningItem, Machine, MachineStatus, ReportData } from "@/lib
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("id-ID", {
+  return d.toLocaleString("en-US", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// Freshness of the last reading received from the machine's IoT (ESP32)
+// client — "live" within ~2 normal submit intervals (~60s each), "stale"
+// once it's been a while but still recent, "offline" past 10 minutes with
+// no new data at all.
+type DataFreshness = "live" | "stale" | "offline";
+
+function dataFreshness(lastReadingAt: string | null, now: Date): DataFreshness {
+  if (!lastReadingAt) return "offline";
+  const ageMinutes = (now.getTime() - new Date(lastReadingAt).getTime()) / 60_000;
+  if (ageMinutes <= 2) return "live";
+  if (ageMinutes <= 10) return "stale";
+  return "offline";
+}
+
+function formatRelativeTime(iso: string, now: Date): string {
+  const ageSeconds = Math.max(0, (now.getTime() - new Date(iso).getTime()) / 1000);
+  if (ageSeconds < 60) return "just now";
+  const ageMinutes = Math.round(ageSeconds / 60);
+  if (ageMinutes < 60) return `${ageMinutes} min ago`;
+  const ageHours = Math.round(ageMinutes / 60);
+  if (ageHours < 24) return `${ageHours} hr ago`;
+  return `${Math.round(ageHours / 24)} d ago`;
+}
+
+const FRESHNESS_STYLE: Record<DataFreshness, string> = {
+  live: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400",
+  stale: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400",
+  offline: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400",
+};
+
+function DataFreshnessBadge({
+  lastReadingAt,
+  now,
+}: {
+  lastReadingAt: string | null;
+  now: Date;
+}) {
+  const freshness = dataFreshness(lastReadingAt, now);
+  const Icon = freshness === "offline" ? WifiOff : Wifi;
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+        FRESHNESS_STYLE[freshness],
+      )}
+      title={lastReadingAt ? `Last ESP32 reading: ${formatTimestamp(lastReadingAt)}` : "No sensor data received yet"}
+    >
+      <Icon className="size-3.5" />
+      {lastReadingAt ? (
+        <span>
+          IoT data {formatRelativeTime(lastReadingAt, now)}
+        </span>
+      ) : (
+        <span>No IoT data yet</span>
+      )}
+    </div>
+  );
 }
 
 const EARLY_WARNING_ICON: Record<string, typeof Clock> = {
@@ -178,6 +239,13 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
   const [status, setStatus] = useState<MachineStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    // Ticks the freshness badge's "X min ago" without needing a refetch.
+    const interval = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -190,7 +258,7 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
       setStatus(statusData);
     } catch (err) {
       unstable_rethrow(err);
-      toast.error(err instanceof Error ? err.message : "Gagal memuat diagnosis.");
+      toast.error(err instanceof Error ? err.message : "Failed to load diagnosis.");
     } finally {
       setLoading(false);
       setLoaded(true);
@@ -208,7 +276,7 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
         <div className="flex items-center gap-3">
           <div className="relative size-12 shrink-0 overflow-hidden rounded-xl">
             <Image
-              src="/images/logo_womai_1x1.png"
+              src="/images/womai_logo.png"
               alt="WO.M.AI Logo"
               fill
               sizes="48px"
@@ -220,16 +288,19 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
             <p className="text-sm text-muted-foreground">{machine.name}</p>
           </div>
         </div>
-        <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-          <RefreshCw className={cn("size-4", loading && "animate-spin")} />
-          <span className="sr-only">Refresh</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          {status && <DataFreshnessBadge lastReadingAt={status.lastReadingAt} now={now} />}
+          <Button variant="outline" size="icon" onClick={load} disabled={loading}>
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+            <span className="sr-only">Refresh</span>
+          </Button>
+        </div>
       </div>
 
       {!report && loaded ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Belum ada data sensor untuk mesin ini.
+            No sensor data yet for this machine.
           </CardContent>
         </Card>
       ) : report ? (

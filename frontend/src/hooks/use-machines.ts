@@ -19,7 +19,7 @@ export function useMachines() {
         })
         .catch((err) => {
           unstable_rethrow(err);
-          if (active) toast.error("Gagal memuat daftar mesin.");
+          if (active) toast.error("Failed to load machine list.");
         })
         .finally(() => {
           if (active) setLoading(false);

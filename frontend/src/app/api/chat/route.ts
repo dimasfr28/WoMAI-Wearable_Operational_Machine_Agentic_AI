@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       machineId?: string;
     };
   } catch {
-    return Response.json({ error: "Body harus JSON valid" }, { status: 400 });
+    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
   }
   const messages = body.messages ?? [];
   const text = lastUserText(messages);
@@ -160,7 +160,7 @@ function backendStream(body: ReadableStream<Uint8Array>): Response {
         writer.write({
           type: "text-delta",
           id: "jawaban",
-          delta: "\n\n⚠️ Koneksi ke server terputus sebelum jawaban selesai. Coba lagi.",
+          delta: "\n\n⚠️ Connection to the server was lost before the answer finished. Try again.",
         });
       }
 
@@ -180,7 +180,7 @@ function mockStream(text: string): Response {
       writer.write({ type: "start" });
       writer.write({
         type: "data-status",
-        data: { message: "Menganalisis parameter (mode demo/offline)…" },
+        data: { message: "Analyzing parameters (demo/offline mode)…" },
         transient: true,
       });
       await sleep(500);

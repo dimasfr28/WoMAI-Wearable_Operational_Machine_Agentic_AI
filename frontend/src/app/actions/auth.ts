@@ -28,7 +28,7 @@ export async function loginAction(
   const next = safeNext(formData.get("next"));
 
   if (!username || !password) {
-    return { error: "Username dan password wajib diisi." };
+    return { error: "Username and password are required." };
   }
 
   let token: string;
@@ -43,15 +43,15 @@ export async function loginAction(
       const body = (await resp.json().catch(() => null)) as {
         detail?: string;
       } | null;
-      return { error: body?.detail ?? "Username atau password salah." };
+      return { error: body?.detail ?? "Incorrect username or password." };
     }
     if (!resp.ok) {
-      return { error: "Server tidak terjangkau, coba lagi." };
+      return { error: "Server unreachable, try again." };
     }
     const data = (await resp.json()) as { access_token: string };
     token = data.access_token;
   } catch {
-    return { error: "Server tidak terjangkau, coba lagi." };
+    return { error: "Server unreachable, try again." };
   }
 
   await setSessionCookie(token);
@@ -68,7 +68,7 @@ export async function registerAction(
   const fullName = String(formData.get("full_name") ?? "").trim();
 
   if (!username || !email || !password) {
-    return { error: "Username, email, dan password wajib diisi." };
+    return { error: "Username, email, and password are required." };
   }
 
   try {
@@ -85,22 +85,22 @@ export async function registerAction(
       signal: AbortSignal.timeout(10_000),
     });
     if (resp.status === 403) {
-      return { error: "Registrasi publik ditutup, hubungi admin." };
+      return { error: "Public registration is closed, contact an admin." };
     }
     if (resp.status === 409) {
-      return { error: "Username atau email sudah terdaftar." };
+      return { error: "Username or email is already registered." };
     }
     if (resp.status === 400) {
       const body = (await resp.json().catch(() => null)) as {
         detail?: string;
       } | null;
-      return { error: body?.detail ?? "Data pendaftaran tidak valid." };
+      return { error: body?.detail ?? "Registration data is invalid." };
     }
     if (!resp.ok) {
-      return { error: "Server tidak terjangkau, coba lagi." };
+      return { error: "Server unreachable, try again." };
     }
   } catch {
-    return { error: "Server tidak terjangkau, coba lagi." };
+    return { error: "Server unreachable, try again." };
   }
 
   redirect("/login?registered=1");

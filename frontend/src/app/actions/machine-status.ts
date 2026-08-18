@@ -50,7 +50,7 @@ export async function getMachineStatusAction(
   );
   if (resp.status === 404) return null;
   if (!resp.ok) {
-    throw new Error(`Gagal memuat status mesin (${resp.status})`);
+    throw new Error(`Failed to load machine status (${resp.status})`);
   }
   const data = (await resp.json()) as MachineStatusApiOut;
   return fromApi(data);

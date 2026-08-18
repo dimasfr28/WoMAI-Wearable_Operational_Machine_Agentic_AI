@@ -12,7 +12,7 @@ export function ShapCard({ data }: { data: ShapResult }) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          Faktor Pendorong Prediksi (SHAP)
+          Prediction Drivers (SHAP)
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -39,7 +39,7 @@ export function ShapCard({ data }: { data: ShapResult }) {
           </div>
         ))}
         <p className="pt-1 text-xs text-muted-foreground">
-          Merah menaikkan risiko kegagalan; hijau menurunkan.
+          Red increases failure risk; green decreases it.
         </p>
       </CardContent>
     </Card>
