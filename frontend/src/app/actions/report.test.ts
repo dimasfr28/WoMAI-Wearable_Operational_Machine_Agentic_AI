@@ -179,7 +179,7 @@ describe("getReportAction", () => {
   it("throws on a non-ok, non-404 status", async () => {
     mockedBackendFetch.mockResolvedValue(jsonResponse({}, 500));
     await expect(getReportAction("m-1")).rejects.toThrow(
-      "Gagal memuat laporan (500)",
+      "Failed to load report (500)",
     );
   });
 });

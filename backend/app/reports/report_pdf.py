@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import re
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -119,6 +120,26 @@ def _parse_rag_answer_sections(answer_text: str) -> dict[str, str]:
         elif "affected part" in heading or "component" in heading:
             sections["affected_part"] = html
     return sections
+
+
+def _atomic_write_pdf(html_str: str, output_path: Path) -> None:
+    """Writes to a temp file in the same directory then os.replace()s it onto
+    output_path — os.replace is atomic on POSIX, so a concurrent reader of
+    output_path (e.g. GET /machine-report/latest/pdf) always sees either the
+    fully-old or fully-new file, never a partial one. Needed once a run's PDF
+    can be regenerated multiple times in place (see
+    _generate_machine_report_pdf's upsert-by-run behavior, routes_report.py).
+    On failure, the temp file is cleaned up and the destination is left
+    exactly as it was — the destination is never touched until the new file
+    is fully written."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_name(output_path.name + ".tmp")
+    try:
+        HTML(string=html_str).write_pdf(str(tmp_path))
+        os.replace(tmp_path, output_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def render_machine_report_pdf(
@@ -245,5 +266,4 @@ def render_machine_report_pdf(
         condition_log=condition_log,
     )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    HTML(string=html_str).write_pdf(str(output_path))
+    _atomic_write_pdf(html_str, output_path)

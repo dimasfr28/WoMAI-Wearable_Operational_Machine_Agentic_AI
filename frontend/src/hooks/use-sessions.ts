@@ -17,7 +17,7 @@ export function useSessions() {
           if (active) setSessions(loaded);
         })
         .catch(() => {
-          if (active) toast.error("Gagal memuat riwayat percakapan.");
+          if (active) toast.error("Failed to load conversation history.");
         })
         .finally(() => {
           if (active) setLoading(false);

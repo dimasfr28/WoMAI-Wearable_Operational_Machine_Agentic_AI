@@ -2,3 +2,7 @@
 # pull in vLLM + the full CUDA stack, multi-GB and useless without a GPU. Kept in
 # sync with the version this service was validated against; bump deliberately.
 mineru[pipeline]==3.4.4
+# Transitively required by mineru's pipeline backend but not pulled in as a
+# real dependency of any of its packages — parsing fails with "No module
+# named 'six'" without this pinned explicitly.
+six==1.17.0

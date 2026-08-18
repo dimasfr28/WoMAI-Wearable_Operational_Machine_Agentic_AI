@@ -19,7 +19,7 @@ export function useSops() {
         })
         .catch((err) => {
           unstable_rethrow(err);
-          if (active) toast.error("Gagal memuat daftar SOP.");
+          if (active) toast.error("Failed to load SOP list.");
         })
         .finally(() => {
           if (active) setLoading(false);

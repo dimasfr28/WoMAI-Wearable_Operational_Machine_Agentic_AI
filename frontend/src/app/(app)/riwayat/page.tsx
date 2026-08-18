@@ -30,7 +30,7 @@ import {
 import { useSessions } from "@/hooks/use-sessions";
 import { useMachines } from "@/hooks/use-machines";
 import { clearSessions, deleteSession } from "@/lib/storage";
-import { RISK_BADGE } from "@/lib/risk";
+import { RISK_BADGE, RISK_LABEL } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 
 function RiwayatContent() {
@@ -52,16 +52,16 @@ function RiwayatContent() {
 
   const filterLabel =
     machineFilter === "all"
-      ? "Semua Mesin"
+      ? "All Machines"
       : machineFilter === "none"
-        ? "Umum"
+        ? "General"
         : (machines.find((m) => m.id === machineFilter)?.name ??
-          "Mesin tidak dikenal");
+          "Unknown machine");
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto p-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">Riwayat Percakapan</h1>
+        <h1 className="text-xl font-semibold">Conversation History</h1>
         <AlertDialog>
           {/* Base UI uses render prop instead of asChild */}
           <AlertDialogTrigger
@@ -70,28 +70,29 @@ function RiwayatContent() {
               <Button variant="outline" size="sm" />
             }
           >
-            Hapus Semua
+            Delete All
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Hapus semua riwayat?</AlertDialogTitle>
+              <AlertDialogTitle>Delete all history?</AlertDialogTitle>
               <AlertDialogDescription>
-                Seluruh sesi percakapan akan dihapus permanen dari browser ini.
+                All conversation sessions will be permanently deleted from
+                this browser.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Batal</AlertDialogCancel>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={async () => {
                   try {
                     await clearSessions();
-                    toast.success("Semua riwayat dihapus.");
+                    toast.success("All history deleted.");
                   } catch {
-                    toast.error("Gagal menghapus riwayat.");
+                    toast.error("Failed to delete history.");
                   }
                 }}
               >
-                Hapus Semua
+                Delete All
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -104,7 +105,7 @@ function RiwayatContent() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari percakapan…"
+            placeholder="Search conversations…"
             className="pl-9"
           />
         </div>
@@ -126,8 +127,8 @@ function RiwayatContent() {
             </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Semua Mesin</SelectItem>
-            <SelectItem value="none">Umum</SelectItem>
+            <SelectItem value="all">All Machines</SelectItem>
+            <SelectItem value="none">General</SelectItem>
             {machines.length > 0 && <SelectSeparator />}
             {machines.map((m) => (
               <SelectItem key={m.id} value={m.id}>
@@ -141,8 +142,8 @@ function RiwayatContent() {
       {filtered.length === 0 && (
         <p className="py-12 text-center text-sm text-muted-foreground">
           {sessions.length === 0
-            ? "Belum ada percakapan tersimpan."
-            : "Tidak ada hasil yang cocok."}
+            ? "No saved conversations yet."
+            : "No matching results."}
         </p>
       )}
 
@@ -156,18 +157,18 @@ function RiwayatContent() {
               >
                 <span className="truncate font-medium">{s.title}</span>
                 <span className="text-xs text-muted-foreground">
-                  {new Date(s.updatedAt).toLocaleString("id-ID", {
+                  {new Date(s.updatedAt).toLocaleString("en-US", {
                     dateStyle: "medium",
                     timeStyle: "short",
                   })}
                 </span>
               </Link>
               <Badge variant="outline" className="shrink-0">
-                {/* Nama live bila mesin masih ada; snapshot bila sudah dihapus */}
+                {/* Live name while the machine still exists; snapshot once it's been deleted */}
                 {(s.machineId
                   ? (machines.find((m) => m.id === s.machineId)?.name ??
                     s.machineName)
-                  : s.machineName) ?? "Umum"}
+                  : s.machineName) ?? "General"}
               </Badge>
               {s.lastPrediction ? (
                 <Badge
@@ -177,12 +178,12 @@ function RiwayatContent() {
                   )}
                 >
                   {s.lastPrediction.label
-                    ? `Berpotensi gagal · risiko ${s.lastPrediction.riskLevel}`
+                    ? `Potential failure · ${RISK_LABEL[s.lastPrediction.riskLevel]} risk`
                     : "Normal"}
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="shrink-0">
-                  Belum ada prediksi
+                  No prediction yet
                 </Badge>
               )}
               <Button
@@ -191,14 +192,14 @@ function RiwayatContent() {
                 onClick={async () => {
                   try {
                     await deleteSession(s.id);
-                    toast.success("Sesi dihapus.");
+                    toast.success("Session deleted.");
                   } catch {
-                    toast.error("Gagal menghapus sesi.");
+                    toast.error("Failed to delete session.");
                   }
                 }}
               >
                 <Trash2 className="size-4" />
-                <span className="sr-only">Hapus sesi</span>
+                <span className="sr-only">Delete session</span>
               </Button>
             </CardContent>
           </Card>

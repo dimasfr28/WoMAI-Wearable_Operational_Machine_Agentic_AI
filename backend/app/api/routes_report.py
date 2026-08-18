@@ -31,6 +31,7 @@ from app.ml.predictor_horizon import get_model_bundle as get_horizon_bundle
 from app.ml.predictor_horizon import predict_failure_horizon
 from app.ml.shap_tool import explain_failure_shap
 from app.rag.crag_graph import extract_part_names, generate_search_queries, run_crag, summarize_cause_analysis
+from app.rag.judge import evaluate_faithfulness
 from app.rag.final_report import (
     EarlyWarningContext,
     FinalReportContext,
@@ -99,13 +100,14 @@ def _historical_df(db: Session, machine_id: str, limit: int = 5000) -> pd.DataFr
 
 
 def _generate_machine_report_pdf(
-    db: Session, machine_id: str, prediction: Prediction, report_out: ReportOut
+    db: Session, machine_id: str, run_id: str | None, prediction: Prediction, report_out: ReportOut
 ) -> None:
-    """Machine Report PDF (rancangan.txt Section 7) — dipanggil sekali di
-    akhir _run_report_pipeline, setiap data sensor baru masuk (sesuai
-    permintaan "setiap data databaru masuk maka lsng dibuatkan report").
-    Kegagalan di sini TIDAK boleh menggagalkan pipeline prediksi/report utama
-    — caller membungkus panggilan ini dengan try/except."""
+    """Machine Report PDF (rancangan.txt Section 7) — one row/file per run,
+    not per reading: the first reading of a run creates the report, every
+    later reading in that same still-open run overwrites the same file/row
+    in place. Called once at the end of _run_report_pipeline, every time a
+    new sensor reading comes in. Failure here must NOT fail the main
+    prediction/report pipeline — the caller wraps this call in try/except."""
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     machine_name = machine.name if machine else "CNC Machine"
 
@@ -128,17 +130,19 @@ def _generate_machine_report_pdf(
         ),
     )
 
-    # Condition Log (section 6) — riwayat kondisi mesin ini, dari predictions
-    # terakhir (limit 10 baris terbaru, cukup untuk "periode pengamatan"
-    # tanpa membuat laporan PDF membengkak).
+    # Condition Log (section 6) — this run's own readings only (not
+    # cross-run history), so the PDF's log matches "1 PDF = 1 run". Capped
+    # at 50 rows so a very long-running run doesn't produce an unbounded
+    # table.
     history_rows = (
         db.query(Prediction, SensorReading)
         .join(SensorReading, Prediction.sensor_reading_id == SensorReading.id)
-        .join(SensorRun, SensorRun.id == SensorReading.run_id)
-        .filter(SensorRun.machine_id == machine_id)
-        .order_by(Prediction.created_at.desc())
-        .limit(10)
+        .filter(SensorReading.run_id == run_id)
+        .order_by(SensorReading.reading_timestamp.asc())
+        .limit(50)
         .all()
+        if run_id is not None
+        else []
     )
     condition_log = [
         ConditionLogRow(
@@ -153,9 +157,25 @@ def _generate_machine_report_pdf(
         for pred, reading in history_rows
     ]
 
-    report_date = report_folder.today_utc()
-    report_number = report_folder.next_report_number(db, machine_id, report_date)
-    output_path = report_folder.report_path(machine_id, report_date, report_number)
+    # Upsert by run_id: reuse the existing report's number/file if this run
+    # already has one (a later reading in the same still-open run), otherwise
+    # allocate a fresh report_number/file_path (this run's first reading).
+    # run_id is guarded against None explicitly — matching against
+    # `MachineReport.run_id == None` would otherwise collide with legacy
+    # rows created before this column existed.
+    existing_report: MachineReport | None = (
+        db.query(MachineReport).filter(MachineReport.run_id == run_id).first()
+        if run_id is not None
+        else None
+    )
+
+    if existing_report is not None:
+        report_number = existing_report.report_number
+        output_path = report_folder.resolve(existing_report.file_path)
+    else:
+        report_date = report_folder.today_utc()
+        report_number = report_folder.next_report_number(db, machine_id, report_date)
+        output_path = report_folder.report_path(machine_id, report_date, report_number)
 
     render_machine_report_pdf(
         machine_id=machine_id,
@@ -167,14 +187,20 @@ def _generate_machine_report_pdf(
         output_path=output_path,
     )
 
-    machine_report = MachineReport(
-        machine_id=machine_id,
-        prediction_id=prediction.id,
-        report_number=report_number,
-        file_path=report_folder.relative_path(machine_id, report_date, report_number),
-        operating_status=operating_status,
-    )
-    db.add(machine_report)
+    if existing_report is not None:
+        existing_report.prediction_id = prediction.id
+        existing_report.operating_status = operating_status
+        db.add(existing_report)
+    else:
+        machine_report = MachineReport(
+            machine_id=machine_id,
+            run_id=run_id,
+            prediction_id=prediction.id,
+            report_number=report_number,
+            file_path=report_folder.relative_path(machine_id, report_date, report_number),
+            operating_status=operating_status,
+        )
+        db.add(machine_report)
     db.commit()
 
 
@@ -366,6 +392,18 @@ def _run_report_pipeline(
                 "part_name": None,
             }
 
+        faithfulness_score = evaluate_faithfulness(
+            query=query_text,
+            answer=crag_state["answer"],
+            contexts=[d.page_content for d in crag_state.get("documents", [])],
+        )
+        logger.info(
+            "ragas_faithfulness score=%s machine_id=%s prediction_id=%s",
+            faithfulness_score,
+            machine_id,
+            prediction.id,
+        )
+
         retrieved_ids = [
             d.metadata.get("postgres_chunk_id")
             for d in crag_state.get("documents", [])
@@ -509,7 +547,7 @@ def _run_report_pipeline(
     )
 
     try:
-        _generate_machine_report_pdf(db, machine_id, prediction, report_out)
+        _generate_machine_report_pdf(db, machine_id, sensor_reading.run_id, prediction, report_out)
     except Exception:
         logger.exception("_run_report_pipeline: Machine Report PDF generation failed")
 
@@ -521,34 +559,43 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
     """Perubahan 2: TIDAK generate apapun lagi di sini — report sudah dibuat SEKALI
     oleh routes_sensor.py's submit_reading() saat data sensor masuk (lihat
     _run_report_pipeline). Endpoint ini murni query DB, jadi harus cepat (tidak ada
-    panggilan LLM/SHAP/KNN/CRAG di request path GET ini)."""
-    sensor_reading = (
-        db.query(SensorReading)
-        .join(SensorRun, SensorRun.id == SensorReading.run_id)
-        .filter(SensorRun.machine_id == machine_id)
-        .order_by(SensorReading.reading_timestamp.desc())
-        .first()
-    )
-    if sensor_reading is None:
-        raise HTTPException(status_code=404, detail="Belum ada data sensor. Input data sensor terlebih dahulu.")
+    panggilan LLM/SHAP/KNN/CRAG di request path GET ini).
 
-    prediction = (
-        db.query(Prediction)
-        .filter(Prediction.sensor_reading_id == sensor_reading.id)
-        .order_by(Prediction.created_at.desc())
+    Mengambil reading TERBARU YANG SUDAH PUNYA final_report — bukan reading
+    paling baru secara mutlak. Kalau reading paling baru masih diproses
+    (lumrah terjadi: klien seperti ESP32 submit tiap ~60 detik, sementara
+    pipeline CRAG+scraping part price bisa makan 1-2 menit, jadi reading
+    berikutnya sering sudah masuk sebelum reading sebelumnya kelar diproses),
+    endpoint ini fallback ke report lengkap terakhir alih-alih 404 padahal
+    datanya sebenarnya ada, cuma belum selesai diproses."""
+    row = (
+        db.query(SensorReading, Prediction, FinalReport)
+        .join(SensorRun, SensorRun.id == SensorReading.run_id)
+        .join(Prediction, Prediction.sensor_reading_id == SensorReading.id)
+        .join(FinalReport, FinalReport.prediction_id == Prediction.id)
+        .filter(SensorRun.machine_id == machine_id)
+        .order_by(SensorReading.reading_timestamp.desc(), FinalReport.created_at.desc())
         .first()
     )
-    if prediction is None:
+    if row is None:
+        has_any_reading = (
+            db.query(SensorReading.id)
+            .join(SensorRun, SensorRun.id == SensorReading.run_id)
+            .filter(SensorRun.machine_id == machine_id)
+            .first()
+            is not None
+        )
+        if not has_any_reading:
+            raise HTTPException(status_code=404, detail="No sensor data yet. Submit sensor data first.")
         raise HTTPException(
             status_code=404,
             detail=(
-                "Report belum tersedia untuk data sensor ini — kemungkinan pipeline "
-                "gagal saat submit (mis. data lama sebelum fitur auto-report, atau "
-                "error di SHAP/KNN/CRAG/LLM saat data ini disubmit). Cek log backend "
-                "untuk sensor_reading_id="
-                f"{sensor_reading.id}."
+                "Report not ready yet — the latest reading is still being processed "
+                "(SHAP/KNN/CRAG/LLM) and there is no complete previous report "
+                "for this machine yet. Please try again shortly."
             ),
         )
+    sensor_reading, prediction, final_report = row
 
     feature_row = {
         "air_temperature_k": float(sensor_reading.air_temperature_k),
@@ -647,22 +694,6 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
         )
         for p in part_price_rows
     ]
-
-    final_report = (
-        db.query(FinalReport)
-        .filter(FinalReport.prediction_id == prediction.id)
-        .order_by(FinalReport.created_at.desc())
-        .first()
-    )
-    if final_report is None:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Report belum tersedia untuk data sensor ini — kemungkinan pipeline "
-                "gagal saat submit sebelum laporan akhir sempat dibuat. Cek log "
-                f"backend untuk sensor_reading_id={sensor_reading.id}."
-            ),
-        )
 
     return ReportOut(
         sensor=SensorSnapshotOut(

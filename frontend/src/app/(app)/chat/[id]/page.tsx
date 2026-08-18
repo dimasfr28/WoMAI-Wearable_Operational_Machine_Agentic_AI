@@ -39,9 +39,9 @@ export default function ChatSessionPage({
   if (session === null) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2">
-        <p className="text-muted-foreground">Sesi tidak ditemukan.</p>
+        <p className="text-muted-foreground">Session not found.</p>
         <Link className="text-primary underline" href="/chat">
-          Mulai chat baru
+          Start a new chat
         </Link>
       </div>
     );

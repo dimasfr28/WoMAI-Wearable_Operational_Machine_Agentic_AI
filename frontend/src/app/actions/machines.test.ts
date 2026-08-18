@@ -62,7 +62,7 @@ describe("loadMachinesAction", () => {
   it("throws when the backend responds with a non-ok status", async () => {
     mockedBackendFetch.mockResolvedValue(jsonResponse({}, 500));
     await expect(loadMachinesAction()).rejects.toThrow(
-      "Gagal memuat daftar mesin (500)",
+      "Failed to load machine list (500)",
     );
   });
 });

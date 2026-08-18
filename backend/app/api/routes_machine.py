@@ -72,7 +72,7 @@ def create_machine(
 def get_machine(machine_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     if machine is None:
-        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Machine not found")
     doc_count = db.query(Document).filter(Document.machine_id == machine.id).count()
     run_count = db.query(SensorRun).filter(SensorRun.machine_id == machine.id).count()
     return MachineOut(
@@ -95,7 +95,7 @@ def update_machine(
 ):
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     if machine is None:
-        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Machine not found")
     if "name" in payload.model_fields_set and payload.name is not None:
         machine.name = payload.name
     if "machine_type" in payload.model_fields_set:
@@ -123,13 +123,13 @@ def delete_machine(
 ):
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     if machine is None:
-        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Machine not found")
     doc_count = db.query(Document).filter(Document.machine_id == machine.id).count()
     run_count = db.query(SensorRun).filter(SensorRun.machine_id == machine.id).count()
     if doc_count > 0 or run_count > 0:
         raise HTTPException(
             status_code=409,
-            detail=f"Mesin masih punya {doc_count} dokumen dan {run_count} sensor run — hapus data terkait dulu.",
+            detail=f"Machine still has {doc_count} document(s) and {run_count} sensor run(s) — delete related data first.",
         )
     db.delete(machine)
     db.commit()
@@ -252,7 +252,7 @@ def get_machine_status(machine_id: str, db: Session = Depends(get_db), user: Use
     predictions, shap_explanations, recommendations), tidak ada model/skor baru."""
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     if machine is None:
-        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Machine not found")
 
     latest_reading = (
         db.query(SensorReading)

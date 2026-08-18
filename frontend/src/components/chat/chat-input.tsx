@@ -34,7 +34,7 @@ export function ChatInput({ disabled, onSend, machine }: ChatInputProps) {
           className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
           render={<Link href="/machine-report" />}
         >
-          Lihat laporan lengkap →
+          View full report →
         </Button>
       </div>
       <form
@@ -55,12 +55,12 @@ export function ChatInput({ disabled, onSend, machine }: ChatInputProps) {
           }}
           maxLength={MAX_LENGTH}
           rows={2}
-          placeholder={`Tanyakan sesuatu tentang ${machine.name}…`}
+          placeholder={`Ask something about ${machine.name}…`}
           className="min-h-0 resize-none"
         />
         <Button type="submit" size="icon" disabled={disabled || !input.trim()}>
           <SendHorizonal className="size-4" />
-          <span className="sr-only">Kirim</span>
+          <span className="sr-only">Send</span>
         </Button>
       </form>
     </div>

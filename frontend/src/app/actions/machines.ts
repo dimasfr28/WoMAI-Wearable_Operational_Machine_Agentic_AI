@@ -28,7 +28,7 @@ function fromApi(m: MachineApiOut): Machine {
 export async function loadMachinesAction(): Promise<Machine[]> {
   const resp = await backendFetch("/machines", { cache: "no-store" });
   if (!resp.ok) {
-    throw new Error(`Gagal memuat daftar mesin (${resp.status})`);
+    throw new Error(`Failed to load machine list (${resp.status})`);
   }
   const data = (await resp.json()) as MachineApiOut[];
   return data.map(fromApi);
@@ -38,7 +38,7 @@ export async function getMachineAction(id: string): Promise<Machine | null> {
   const resp = await backendFetch(`/machines/${id}`, { cache: "no-store" });
   if (resp.status === 404) return null;
   if (!resp.ok) {
-    throw new Error(`Gagal memuat mesin (${resp.status})`);
+    throw new Error(`Failed to load machine (${resp.status})`);
   }
   const data = (await resp.json()) as MachineApiOut;
   return fromApi(data);
@@ -62,7 +62,7 @@ export async function saveMachineAction(input: {
     },
   );
   if (!resp.ok) {
-    throw new Error(`Gagal menyimpan mesin (${resp.status})`);
+    throw new Error(`Failed to save machine (${resp.status})`);
   }
   const data = (await resp.json()) as MachineApiOut;
   return fromApi(data);
@@ -74,6 +74,6 @@ export async function deleteMachineAction(id: string): Promise<void> {
     const body = (await resp.json().catch(() => null)) as {
       detail?: string;
     } | null;
-    throw new Error(body?.detail ?? `Gagal menghapus mesin (${resp.status})`);
+    throw new Error(body?.detail ?? `Failed to delete machine (${resp.status})`);
   }
 }

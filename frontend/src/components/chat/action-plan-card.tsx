@@ -28,10 +28,10 @@ export function ActionPlanCard({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Rencana Tindakan · {plan.title}
+            Action Plan · {plan.title}
           </CardTitle>
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {done}/{plan.steps.length} langkah · ±{totalMinutes} menit
+            {done}/{plan.steps.length} steps · ±{totalMinutes} min
           </span>
         </div>
       </CardHeader>
@@ -62,7 +62,7 @@ export function ActionPlanCard({
                     step.priority === "segera" ? "destructive" : "secondary"
                   }
                 >
-                  {step.priority === "segera" ? "Segera" : "Terjadwal"}
+                  {step.priority === "segera" ? "Urgent" : "Scheduled"}
                 </Badge>
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {step.estimatedMinutes}m

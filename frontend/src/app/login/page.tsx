@@ -41,11 +41,11 @@ function LoginForm() {
     <div className="flex min-h-svh items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="font-heading">Masuk ke WO.M.AI</CardTitle>
+          <CardTitle className="font-heading">Sign in to WO.M.AI</CardTitle>
           <CardDescription>
             {justRegistered
-              ? "Akun dibuat, silakan masuk."
-              : "Masuk untuk mengakses mesin & riwayat percakapan."}
+              ? "Account created, please sign in."
+              : "Sign in to access machines & conversation history."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -58,18 +58,18 @@ function LoginForm() {
                 name="username"
                 type="text"
                 autoComplete="username"
-                placeholder="nama.pengguna"
+                placeholder="your.username"
                 required
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="password">Kata sandi</Label>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                placeholder="Kata sandi"
+                placeholder="Password"
                 required
               />
             </div>
@@ -77,14 +77,14 @@ function LoginForm() {
               <p className="text-sm text-destructive">{state.error}</p>
             )}
             <Button type="submit" disabled={pending}>
-              {pending ? "Memproses…" : "Masuk"}
+              {pending ? "Processing…" : "Sign in"}
             </Button>
           </form>
           <Link
             href="/register"
             className="mt-4 block w-full text-center text-sm text-muted-foreground hover:text-foreground"
           >
-            Belum punya akun? Daftar
+            Don&apos;t have an account? Sign up
           </Link>
         </CardContent>
       </Card>

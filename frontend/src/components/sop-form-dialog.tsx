@@ -96,10 +96,10 @@ export function SopFormDialog({
       });
       onSaved(saved);
       onOpenChange(false);
-      toast.success(sop ? "SOP diperbarui." : "SOP ditambahkan.");
+      toast.success(sop ? "SOP updated." : "SOP added.");
     } catch (err) {
       unstable_rethrow(err);
-      toast.error(err instanceof Error ? err.message : "Gagal menyimpan SOP.");
+      toast.error(err instanceof Error ? err.message : "Failed to save SOP.");
     } finally {
       setSaving(false);
     }
@@ -109,48 +109,48 @@ export function SopFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{sop ? "Edit SOP" : "Tambah SOP"}</DialogTitle>
+          <DialogTitle>{sop ? "Edit SOP" : "Add SOP"}</DialogTitle>
           <DialogDescription>
-            Dokumen SOP jadi rujukan rekomendasi tindakan. Rekomendasi chatbot
-            hanya diambil dari SOP yang tersimpan di sini.
+            SOP documents are the reference for action recommendations. The
+            chatbot&apos;s recommendations are drawn only from the SOPs saved here.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="sop-title">
-              Judul <span className="text-destructive">*</span>
+              Title <span className="text-destructive">*</span>
             </Label>
             <Input
               id="sop-title"
-              placeholder="mis. Penanganan Heat Dissipation Failure"
+              placeholder="e.g. Heat Dissipation Failure Handling"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="sop-symptoms">Gejala / kata kunci</Label>
+            <Label htmlFor="sop-symptoms">Symptoms / keywords</Label>
             <Textarea
               id="sop-symptoms"
-              placeholder="mis. suhu proses tinggi, mesin panas, pembuangan panas tidak efektif"
+              placeholder="e.g. high process temperature, hot machine, ineffective heat dissipation"
               value={symptoms}
               onChange={(e) => setSymptoms(e.target.value)}
               rows={2}
               className="resize-none"
             />
             <p className="text-muted-foreground text-xs">
-              Dipakai mesin pencari SOP untuk mencocokkan kondisi mesin.
+              Used by the SOP search to match machine conditions.
             </p>
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="sop-body">
-              Deskripsi &amp; tindakan <span className="text-destructive">*</span>
+              Description &amp; actions <span className="text-destructive">*</span>
             </Label>
             <Textarea
               id="sop-body"
-              placeholder="Penjelasan penyebab + garis besar tindakan penanganan…"
+              placeholder="Explanation of the cause + outline of the handling steps…"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={4}
@@ -159,19 +159,19 @@ export function SopFormDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="sop-reference">Referensi</Label>
+            <Label htmlFor="sop-reference">Reference</Label>
             <Input
               id="sop-reference"
-              placeholder="mis. SOP Maintenance Termal - Rev.2"
+              placeholder="e.g. Thermal Maintenance SOP - Rev.2"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
             />
           </div>
 
-          {/* Langkah tindakan */}
+          {/* Action steps */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <Label>Langkah tindakan</Label>
+              <Label>Action steps</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -179,7 +179,7 @@ export function SopFormDialog({
                 onClick={() => setSteps((prev) => [...prev, emptyStep()])}
               >
                 <Plus className="size-4" />
-                Tambah langkah
+                Add step
               </Button>
             </div>
             <div className="flex flex-col gap-3">
@@ -193,7 +193,7 @@ export function SopFormDialog({
                       {i + 1}.
                     </span>
                     <Input
-                      placeholder="Deskripsi langkah"
+                      placeholder="Step description"
                       value={s.text}
                       onChange={(e) => updateStep(s.id, { text: e.target.value })}
                       className="flex-1"
@@ -207,7 +207,7 @@ export function SopFormDialog({
                       }
                     >
                       <Trash2 className="size-4" />
-                      <span className="sr-only">Hapus langkah</span>
+                      <span className="sr-only">Remove step</span>
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-2 pl-6">
@@ -221,8 +221,8 @@ export function SopFormDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="segera">Segera</SelectItem>
-                        <SelectItem value="terjadwal">Terjadwal</SelectItem>
+                        <SelectItem value="segera">Urgent</SelectItem>
+                        <SelectItem value="terjadwal">Scheduled</SelectItem>
                       </SelectContent>
                     </Select>
                     <div className="flex items-center gap-1.5">
@@ -237,7 +237,7 @@ export function SopFormDialog({
                         }
                         className="w-20"
                       />
-                      <span className="text-muted-foreground text-sm">menit</span>
+                      <span className="text-muted-foreground text-sm">min</span>
                     </div>
                   </div>
                 </div>
@@ -248,7 +248,7 @@ export function SopFormDialog({
 
         <DialogFooter>
           <Button type="button" onClick={handleSave} disabled={!canSave}>
-            Simpan SOP
+            Save SOP
           </Button>
         </DialogFooter>
       </DialogContent>

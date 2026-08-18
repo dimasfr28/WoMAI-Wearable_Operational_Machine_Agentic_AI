@@ -355,12 +355,12 @@ def run_bot_agent(
         }
 
         # 1. Router step
-        yield _emit({"type": "status", "message": "Menganalisis pesan..."})
+        yield _emit({"type": "status", "message": "Analyzing message..."})
         state = router_node(state)
 
         # 2A. Chitchat flow
         if state.get("intent") == "chitchat":
-            yield _emit({"type": "status", "message": "Mengetik balasan..."})
+            yield _emit({"type": "status", "message": "Typing reply..."})
             state = chitchat_node(state)
             reply = state.get("final_response", "")
             words = reply.split(" ")
@@ -370,7 +370,7 @@ def run_bot_agent(
             return
 
         # 2B. Resolve Machine step
-        yield _emit({"type": "status", "message": "Mengidentifikasi mesin..."})
+        yield _emit({"type": "status", "message": "Identifying machine..."})
         state = resolve_machine_node(state, db=db)
 
         # Handle ambiguity
@@ -400,7 +400,7 @@ def run_bot_agent(
             pending = state.get("_pending_tool") or {}
             tool_name = pending.get("tool_name", "")
             tool_args = pending.get("tool_args", {})
-            status_msg = pending.get("status_message") or f"Menjalankan {tool_name}..."
+            status_msg = pending.get("status_message") or f"Running {tool_name}..."
 
             yield _emit({"type": "status", "message": status_msg})
             yield _emit({
@@ -413,7 +413,7 @@ def run_bot_agent(
             state = tool_executor_node(state, db=db)
 
         # 4. Synthesize & Stream
-        yield _emit({"type": "status", "message": "Menyusun jawaban..."})
+        yield _emit({"type": "status", "message": "Composing answer..."})
         state = synthesize_node(state, db=db)
         final_text = state.get("final_response", "")
 
@@ -424,4 +424,4 @@ def run_bot_agent(
 
     except Exception as exc:
         logger.exception("run_bot_agent encountered an error")
-        yield _emit({"type": "error", "message": f"Terjadi kesalahan: {str(exc)}"})
+        yield _emit({"type": "error", "message": f"An error occurred: {str(exc)}"})

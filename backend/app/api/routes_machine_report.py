@@ -53,7 +53,7 @@ def get_latest_machine_report(machine_id: str, db: Session = Depends(get_db)):
     if report is None:
         raise HTTPException(
             status_code=404,
-            detail="Belum ada Machine Report untuk mesin ini. Input data sensor terlebih dahulu.",
+            detail="No Machine Report yet for this machine. Submit sensor data first.",
         )
     return _to_out(report)
 
@@ -63,7 +63,7 @@ def _serve_pdf(report: MachineReport) -> FileResponse:
     if not pdf_path.is_file():
         raise HTTPException(
             status_code=404,
-            detail=f"File PDF untuk laporan {report.report_number} tidak ditemukan di disk.",
+            detail=f"PDF file for report {report.report_number} was not found on disk.",
         )
     # `filename=` alone makes FileResponse default to
     # `Content-Disposition: attachment` (forces a download) — this endpoint
@@ -89,7 +89,7 @@ def get_latest_machine_report_pdf(machine_id: str, db: Session = Depends(get_db)
     if report is None:
         raise HTTPException(
             status_code=404,
-            detail="Belum ada Machine Report untuk mesin ini. Input data sensor terlebih dahulu.",
+            detail="No Machine Report yet for this machine. Submit sensor data first.",
         )
     return _serve_pdf(report)
 
@@ -98,5 +98,5 @@ def get_latest_machine_report_pdf(machine_id: str, db: Session = Depends(get_db)
 def get_machine_report_pdf(report_id: str, db: Session = Depends(get_db)):
     report = db.query(MachineReport).filter(MachineReport.id == report_id).first()
     if report is None:
-        raise HTTPException(status_code=404, detail="Laporan tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Report not found")
     return _serve_pdf(report)

@@ -54,7 +54,7 @@ def update_sop(
 ):
     sop = db.query(Sop).filter(Sop.id == sop_id).first()
     if sop is None:
-        raise HTTPException(status_code=404, detail="SOP tidak ditemukan")
+        raise HTTPException(status_code=404, detail="SOP not found")
     if payload.title is not None:
         sop.title = payload.title
     if payload.symptoms is not None:
@@ -78,6 +78,6 @@ def delete_sop(
 ):
     sop = db.query(Sop).filter(Sop.id == sop_id).first()
     if sop is None:
-        raise HTTPException(status_code=404, detail="SOP tidak ditemukan")
+        raise HTTPException(status_code=404, detail="SOP not found")
     db.delete(sop)
     db.commit()

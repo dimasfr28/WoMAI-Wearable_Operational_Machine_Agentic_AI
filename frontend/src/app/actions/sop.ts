@@ -53,7 +53,7 @@ function toApiSteps(steps: SopStep[]) {
 export async function loadSopsAction(): Promise<Sop[]> {
   const resp = await backendFetch("/sops", { cache: "no-store" });
   if (!resp.ok) {
-    throw new Error(`Gagal memuat daftar SOP (${resp.status})`);
+    throw new Error(`Failed to load SOP list (${resp.status})`);
   }
   const data = (await resp.json()) as SopApiOut[];
   return data.map(fromApi);
@@ -80,7 +80,7 @@ export async function saveSopAction(input: {
     body: payload,
   });
   if (!resp.ok) {
-    throw new Error(`Gagal menyimpan SOP (${resp.status})`);
+    throw new Error(`Failed to save SOP (${resp.status})`);
   }
   const data = (await resp.json()) as SopApiOut;
   return fromApi(data);
@@ -89,6 +89,6 @@ export async function saveSopAction(input: {
 export async function deleteSopAction(id: string): Promise<void> {
   const resp = await backendFetch(`/sops/${id}`, { method: "DELETE" });
   if (!resp.ok) {
-    throw new Error(`Gagal menghapus SOP (${resp.status})`);
+    throw new Error(`Failed to delete SOP (${resp.status})`);
   }
 }

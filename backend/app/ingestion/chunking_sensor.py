@@ -58,10 +58,10 @@ def build_batch_run_chunk(run_idx: int, start: int, end: int, rows: list[dict], 
     ]
     failure_count = sum(dp["machine_failure"] for dp in data_points)
     summary = (
-        f"Percobaan (run) #{run_idx}: {len(data_points)} titik data, "
-        f"tool wear {data_points[0]['tool_wear_min']:.0f} - {data_points[-1]['tool_wear_min']:.0f} menit, "
-        f"suhu udara {data_points[0]['air_temperature_k']:.1f}K - {data_points[-1]['air_temperature_k']:.1f}K, "
-        f"{'terjadi ' + str(failure_count) + ' machine failure' if failure_count else 'tidak ada machine failure'}."
+        f"Run #{run_idx}: {len(data_points)} data points, "
+        f"tool wear {data_points[0]['tool_wear_min']:.0f} - {data_points[-1]['tool_wear_min']:.0f} min, "
+        f"air temperature {data_points[0]['air_temperature_k']:.1f}K - {data_points[-1]['air_temperature_k']:.1f}K, "
+        f"{str(failure_count) + ' machine failure(s) occurred' if failure_count else 'no machine failures'}."
     )
     row_strs = [
         ", ".join(f"{field}: {dp[field]}" for field in DATASET_FIELDS)
@@ -113,10 +113,10 @@ def build_run_chunk(run: RunLike, readings: Iterable[ReadingLike]) -> dict:
     readings = list(readings)
     failure_count = sum(1 for r in readings if r.machine_failure)
     summary = (
-        f"Percobaan (run) {run.run_label}: {len(readings)} titik data, "
-        f"tool wear {readings[0].tool_wear_min:.0f} - {readings[-1].tool_wear_min:.0f} menit, "
-        f"suhu udara {readings[0].air_temperature_k:.1f}K - {readings[-1].air_temperature_k:.1f}K, "
-        f"{'terjadi ' + str(failure_count) + ' machine failure' if failure_count else 'tidak ada machine failure'}."
+        f"Run {run.run_label}: {len(readings)} data points, "
+        f"tool wear {readings[0].tool_wear_min:.0f} - {readings[-1].tool_wear_min:.0f} min, "
+        f"air temperature {readings[0].air_temperature_k:.1f}K - {readings[-1].air_temperature_k:.1f}K, "
+        f"{str(failure_count) + ' machine failure(s) occurred' if failure_count else 'no machine failures'}."
     )
     row_strs = [
         f"air_temperature_k:{r.air_temperature_k}, process_temperature_k:{r.process_temperature_k}, "
