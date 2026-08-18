@@ -26,7 +26,7 @@ function statusBadgeClass(status: string): string {
 }
 
 function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString("id-ID", {
+  return new Date(iso).toLocaleString("en-US", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -53,7 +53,7 @@ function MachineReportContent({ machine }: { machine: Machine }) {
     } catch (err) {
       unstable_rethrow(err);
       toast.error(
-        err instanceof Error ? err.message : "Gagal memuat Machine Report.",
+        err instanceof Error ? err.message : "Failed to load Machine Report.",
       );
     } finally {
       setLoading(false);
@@ -94,15 +94,15 @@ function MachineReportContent({ machine }: { machine: Machine }) {
             />
           ) : loaded ? (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-              Belum ada Machine Report untuk mesin ini. Laporan akan dibuat
-              otomatis setiap kali data sensor baru masuk.
+              No Machine Report yet for this machine. A report is generated
+              automatically each time new sensor data comes in.
             </div>
           ) : null}
         </div>
 
         <div className="w-72 shrink-0 overflow-y-auto border-l p-3">
           <p className="mb-2 px-1 text-xs font-medium text-muted-foreground">
-            Riwayat Laporan
+            Report History
           </p>
           <div className="flex flex-col gap-2">
             {reports.map((r) => (
@@ -135,7 +135,7 @@ function MachineReportContent({ machine }: { machine: Machine }) {
             ))}
             {reports.length === 0 && loaded && (
               <p className="px-1 text-xs text-muted-foreground">
-                Belum ada laporan.
+                No reports yet.
               </p>
             )}
           </div>

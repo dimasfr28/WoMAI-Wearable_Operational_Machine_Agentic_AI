@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "WO.M.AI · Chatbot Predictive Maintenance",
   description:
-    "Asisten AI untuk tim maintenance pabrik: prediksi kegagalan mesin, penjelasan, dan rekomendasi tindakan.",
+    "AI assistant for factory maintenance teams: machine failure prediction, explanations, and recommended actions.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -40,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="id"
+      lang="en"
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable, montserratHeading.variable)}
     >
       <body className="min-h-full flex flex-col">

@@ -43,7 +43,7 @@ export function ChatMessages({
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <div className="relative size-12 overflow-hidden rounded-xl shadow-sm border border-slate-100 bg-slate-50">
               <Image
-                src="/images/logo_womai_1x1.png"
+                src="/images/womai_logo.png"
                 alt="WO.M.AI Logo"
                 fill
                 sizes="48px"
@@ -51,11 +51,11 @@ export function ChatMessages({
               />
             </div>
             <h2 className="text-lg font-semibold">
-              Ceritakan kondisi mesinmu
+              Describe your machine&apos;s condition
             </h2>
             <p className="max-w-md text-sm text-muted-foreground">
               {
-                "Contoh: “motor line 3 suhu prosesnya 310K, torsi 45 Nm, sudah dipakai 200 menit sejak ganti tool”"
+                "Example: “line 3 motor process temp is 310K, torque 45 Nm, 200 minutes since the last tool change”"
               }
             </p>
           </div>
@@ -109,9 +109,9 @@ export function ChatMessages({
 
         {error && (
           <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
-            <span>Terjadi kesalahan saat memproses. Coba lagi.</span>
+            <span>Something went wrong while processing. Please try again.</span>
             <Button variant="outline" size="sm" onClick={onRetry}>
-              Coba lagi
+              Try again
             </Button>
           </div>
         )}

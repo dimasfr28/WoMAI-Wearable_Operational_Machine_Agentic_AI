@@ -198,7 +198,7 @@ export async function getReportAction(
   );
   if (resp.status === 404) return null;
   if (!resp.ok) {
-    throw new Error(`Gagal memuat laporan (${resp.status})`);
+    throw new Error(`Failed to load report (${resp.status})`);
   }
   const data = (await resp.json()) as ReportApiOut;
   return fromApi(data);

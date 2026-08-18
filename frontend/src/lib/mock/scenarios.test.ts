@@ -7,27 +7,27 @@ import {
 
 describe("pickScenario: kata kunci", () => {
   it("mendeteksi HDF dari kata suhu", () => {
-    expect(pickScenario("motor line 3 suhu prosesnya tinggi").key).toBe("hdf");
+    expect(pickScenario("motor line 3 temperature is running very high").key).toBe("hdf");
   });
 
   it("mendeteksi OSF dari kata torsi", () => {
-    expect(pickScenario("torsi naik terus sejak pagi").key).toBe("osf");
+    expect(pickScenario("torque keeps rising since this morning").key).toBe("osf");
   });
 
   it("mendeteksi TWF dari kata aus", () => {
-    expect(pickScenario("toolnya sudah aus dipakai lama").key).toBe("twf");
+    expect(pickScenario("the tool is worn out from long use").key).toBe("twf");
   });
 
   it("mendeteksi PWF dari kata daya", () => {
-    expect(pickScenario("daya mesin tidak stabil").key).toBe("pwf");
+    expect(pickScenario("machine power is unstable").key).toBe("pwf");
   });
 
   it("default ke skenario normal", () => {
-    expect(pickScenario("mesin jalan seperti biasa").key).toBe("none");
+    expect(pickScenario("machine running as usual").key).toBe("none");
   });
 
   it("tidak sensitif kapital", () => {
-    expect(pickScenario("SUHU PANAS SEKALI").key).toBe("hdf");
+    expect(pickScenario("TEMPERATURE VERY HOT").key).toBe("hdf");
   });
 });
 
@@ -46,7 +46,7 @@ describe("input manual", () => {
   });
 
   it("mengembalikan null untuk teks biasa", () => {
-    expect(parseManualInput("suhu tinggi")).toBeNull();
+    expect(parseManualInput("temperature is high")).toBeNull();
   });
 
   it("suhu proses >= 311 K -> hdf", () => {
