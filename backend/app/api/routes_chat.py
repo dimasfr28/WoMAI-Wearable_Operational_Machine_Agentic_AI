@@ -31,7 +31,7 @@ from app.api.routes_report import get_latest_report as _get_latest_report
 from app.api.routes_sensor import _bump_failure_count_if_needed, assign_run_id
 from app.db.models import ChatMessage, ChatSession, Machine, Prediction, SensorReading, SensorRun, Sop, User
 from app.db.session import SessionLocal
-from app.llm.groq_client import chat, chat_json
+from app.llm.gemini_client import chat, chat_json
 from app.ml.predictor_clasification import RAW_TO_MODEL_COL, ClasificationResult, predict_failure
 from app.ml.shap_tool import explain_failure_shap
 from app.notifications.telegram import notify_new_reading

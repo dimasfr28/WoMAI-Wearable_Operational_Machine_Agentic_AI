@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 
-from app.llm.groq_client import chat_json
+from app.llm.gemini_client import chat_json
 from app.rag.retriever import RetrievedDocument
 
 logger = logging.getLogger(__name__)
