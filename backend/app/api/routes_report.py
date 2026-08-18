@@ -521,34 +521,43 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
     """Perubahan 2: TIDAK generate apapun lagi di sini — report sudah dibuat SEKALI
     oleh routes_sensor.py's submit_reading() saat data sensor masuk (lihat
     _run_report_pipeline). Endpoint ini murni query DB, jadi harus cepat (tidak ada
-    panggilan LLM/SHAP/KNN/CRAG di request path GET ini)."""
-    sensor_reading = (
-        db.query(SensorReading)
-        .join(SensorRun, SensorRun.id == SensorReading.run_id)
-        .filter(SensorRun.machine_id == machine_id)
-        .order_by(SensorReading.reading_timestamp.desc())
-        .first()
-    )
-    if sensor_reading is None:
-        raise HTTPException(status_code=404, detail="Belum ada data sensor. Input data sensor terlebih dahulu.")
+    panggilan LLM/SHAP/KNN/CRAG di request path GET ini).
 
-    prediction = (
-        db.query(Prediction)
-        .filter(Prediction.sensor_reading_id == sensor_reading.id)
-        .order_by(Prediction.created_at.desc())
+    Mengambil reading TERBARU YANG SUDAH PUNYA final_report — bukan reading
+    paling baru secara mutlak. Kalau reading paling baru masih diproses
+    (lumrah terjadi: klien seperti ESP32 submit tiap ~60 detik, sementara
+    pipeline CRAG+scraping part price bisa makan 1-2 menit, jadi reading
+    berikutnya sering sudah masuk sebelum reading sebelumnya kelar diproses),
+    endpoint ini fallback ke report lengkap terakhir alih-alih 404 padahal
+    datanya sebenarnya ada, cuma belum selesai diproses."""
+    row = (
+        db.query(SensorReading, Prediction, FinalReport)
+        .join(SensorRun, SensorRun.id == SensorReading.run_id)
+        .join(Prediction, Prediction.sensor_reading_id == SensorReading.id)
+        .join(FinalReport, FinalReport.prediction_id == Prediction.id)
+        .filter(SensorRun.machine_id == machine_id)
+        .order_by(SensorReading.reading_timestamp.desc(), FinalReport.created_at.desc())
         .first()
     )
-    if prediction is None:
+    if row is None:
+        has_any_reading = (
+            db.query(SensorReading.id)
+            .join(SensorRun, SensorRun.id == SensorReading.run_id)
+            .filter(SensorRun.machine_id == machine_id)
+            .first()
+            is not None
+        )
+        if not has_any_reading:
+            raise HTTPException(status_code=404, detail="Belum ada data sensor. Input data sensor terlebih dahulu.")
         raise HTTPException(
             status_code=404,
             detail=(
-                "Report belum tersedia untuk data sensor ini — kemungkinan pipeline "
-                "gagal saat submit (mis. data lama sebelum fitur auto-report, atau "
-                "error di SHAP/KNN/CRAG/LLM saat data ini disubmit). Cek log backend "
-                "untuk sensor_reading_id="
-                f"{sensor_reading.id}."
+                "Report belum tersedia — reading terbaru masih diproses "
+                "(SHAP/KNN/CRAG/LLM) dan belum ada report lengkap sebelumnya "
+                "untuk mesin ini. Coba lagi sebentar."
             ),
         )
+    sensor_reading, prediction, final_report = row
 
     feature_row = {
         "air_temperature_k": float(sensor_reading.air_temperature_k),
@@ -647,22 +656,6 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
         )
         for p in part_price_rows
     ]
-
-    final_report = (
-        db.query(FinalReport)
-        .filter(FinalReport.prediction_id == prediction.id)
-        .order_by(FinalReport.created_at.desc())
-        .first()
-    )
-    if final_report is None:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Report belum tersedia untuk data sensor ini — kemungkinan pipeline "
-                "gagal saat submit sebelum laporan akhir sempat dibuat. Cek log "
-                f"backend untuk sensor_reading_id={sensor_reading.id}."
-            ),
-        )
 
     return ReportOut(
         sensor=SensorSnapshotOut(
