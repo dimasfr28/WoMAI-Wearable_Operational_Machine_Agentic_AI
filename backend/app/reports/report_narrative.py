@@ -15,7 +15,7 @@ import json
 import logging
 
 from app.config import settings
-from app.llm.groq_client import chat_json
+from app.llm.gemini_client import chat_json
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def generate_machine_report_narrative(
         recommended_action_summary=recommended_action_summary or "(no adjustment recommended)",
     )
     try:
-        raw = chat_json([{"role": "user", "content": prompt}], model=settings.GROQ_MODEL)
+        raw = chat_json([{"role": "user", "content": prompt}], model=settings.GEMINI_MODEL)
         data = json.loads(raw)
         return {
             "condition_summary": data.get("condition_summary") or "",
