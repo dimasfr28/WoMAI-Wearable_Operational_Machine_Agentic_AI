@@ -75,7 +75,7 @@ describe("loginAction", () => {
     expect(cookieStore.get("womai_session")).toBe("tok123");
   });
 
-  it("falls back to /chat when next is not a safe relative path", async () => {
+  it("falls back to /mesin when next is not a safe relative path", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -93,7 +93,7 @@ describe("loginAction", () => {
           next: "//evil.example.com",
         }),
       ),
-    ).rejects.toThrow("REDIRECT:/chat");
+    ).rejects.toThrow("REDIRECT:/mesin");
   });
 
   it("returns a network error message when the backend is unreachable", async () => {
@@ -102,7 +102,7 @@ describe("loginAction", () => {
       {},
       formData({ username: "budi", password: "benar" }),
     );
-    expect(result.error).toBe("Server tidak terjangkau, coba lagi.");
+    expect(result.error).toBe("Server unreachable, try again.");
   });
 });
 
@@ -124,7 +124,7 @@ describe("registerAction", () => {
         password: "rahasia123",
       }),
     );
-    expect(result.error).toBe("Registrasi publik ditutup, hubungi admin.");
+    expect(result.error).toBe("Public registration is closed, contact an admin.");
   });
 
   it("redirects to /login?registered=1 on success", async () => {

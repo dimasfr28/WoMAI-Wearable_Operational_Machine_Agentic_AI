@@ -283,10 +283,13 @@ class FinalReport(Base):
 
 class MachineReport(Base):
     """Machine Report — formal PDF report (rancangan.txt Section 7), one row
-    per generated PDF. Rendered once per sensor reading alongside FinalReport
-    (see app/reports/report_pdf.py), stored on disk under a per-day folder
-    scheme (app/reports/generator.py's report_dir()), referenced here by
-    relative path so the physical layout can change without a migration."""
+    per sensor run (see run_id below), not per reading: the PDF is
+    regenerated and overwritten in place for later readings within the same
+    still-open run, and a new row/file is only created once a new run
+    starts. Rendered alongside FinalReport (see app/reports/report_pdf.py),
+    stored on disk under a per-day folder scheme (app/reports/generator.py's
+    report_dir()), referenced here by relative path so the physical layout
+    can change without a migration."""
 
     __tablename__ = "machine_reports"
 
@@ -302,8 +305,21 @@ class MachineReport(Base):
     report_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     # Relative to REPORTS_DIR (settings) — "<machine_id>/<YYYY-MM-DD>/<report_number>.pdf".
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    # One row per sensor_runs row (not per reading) — see
+    # docs/superpowers/specs/2026-08-18-run-clustering-and-report-design.md.
+    # Unique + nullable: every row created going forward always has run_id
+    # set (a reading is never processed without an assigned run), but
+    # historical rows predating this column keep run_id=NULL, which the
+    # unique constraint permits any number of (NULL is never "equal" to
+    # another NULL for uniqueness purposes).
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sensor_runs.id", ondelete="SET NULL"), nullable=True, index=True, unique=True
+    )
     operating_status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +404,7 @@ class BotSession(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    title: Mapped[str] = mapped_column(String(255), nullable=False, server_default="Chat baru")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, server_default="New Chat")
     machine_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("machines.id", ondelete="SET NULL"), nullable=True
     )

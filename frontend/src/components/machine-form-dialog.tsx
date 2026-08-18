@@ -58,7 +58,7 @@ export function MachineFormDialog({
       onOpenChange(false);
     } catch (err) {
       unstable_rethrow(err);
-      toast.error(err instanceof Error ? err.message : "Gagal menyimpan mesin.");
+      toast.error(err instanceof Error ? err.message : "Failed to save machine.");
     } finally {
       setSaving(false);
     }
@@ -69,31 +69,31 @@ export function MachineFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {machine ? "Edit Mesin" : "Tambah Mesin"}
+            {machine ? "Edit Machine" : "Add Machine"}
           </DialogTitle>
           <DialogDescription>
             {machine
-              ? "Perbarui informasi mesin."
-              : "Tambahkan mesin baru ke daftar."}
+              ? "Update the machine's information."
+              : "Add a new machine to the list."}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="mesin-nama">
-              Nama mesin <span className="text-destructive">*</span>
+              Machine name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="mesin-nama"
-              placeholder="mis. CNC Mill 01"
+              placeholder="e.g. CNC Mill 01"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="mesin-tipe">Tipe mesin (opsional)</Label>
+            <Label htmlFor="mesin-tipe">Machine type (optional)</Label>
             <Input
               id="mesin-tipe"
-              placeholder="mis. Haas"
+              placeholder="e.g. Haas"
               value={machineType}
               onChange={(e) => setMachineType(e.target.value)}
             />
@@ -101,7 +101,7 @@ export function MachineFormDialog({
         </div>
         <DialogFooter>
           <Button type="button" onClick={handleSave} disabled={!canSave}>
-            Simpan Mesin
+            Save Machine
           </Button>
         </DialogFooter>
       </DialogContent>

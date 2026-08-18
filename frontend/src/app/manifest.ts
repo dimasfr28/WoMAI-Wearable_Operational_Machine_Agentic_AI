@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "WO.M.AI · Chatbot Predictive Maintenance",
     short_name: "WO.M.AI",
     description:
-      "Asisten AI untuk tim maintenance pabrik: prediksi kegagalan mesin, penjelasan, dan rekomendasi tindakan.",
+      "AI assistant for factory maintenance teams: machine failure prediction, explanations, and recommended actions.",
     start_url: "/chat",
     display: "standalone",
     background_color: "#ffffff",

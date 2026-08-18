@@ -52,7 +52,7 @@ describe("loadSopsAction", () => {
 
   it("throws when the backend responds with a non-ok status", async () => {
     mockedBackendFetch.mockResolvedValue(jsonResponse({}, 500));
-    await expect(loadSopsAction()).rejects.toThrow("Gagal memuat daftar SOP (500)");
+    await expect(loadSopsAction()).rejects.toThrow("Failed to load SOP list (500)");
   });
 });
 
@@ -132,7 +132,7 @@ describe("deleteSopAction", () => {
   it("throws on non-ok response", async () => {
     mockedBackendFetch.mockResolvedValue(jsonResponse({}, 500));
     await expect(deleteSopAction("sop-1")).rejects.toThrow(
-      "Gagal menghapus SOP (500)",
+      "Failed to delete SOP (500)",
     );
   });
 });

@@ -29,7 +29,7 @@ export async function backendFetch(
     redirect("/login");
   }
   if (resp.status === 403) {
-    throw new Error("Aksi ini butuh role engineer atau lebih tinggi.");
+    throw new Error("This action requires an engineer role or higher.");
   }
   return resp;
 }

@@ -57,7 +57,7 @@ export function AppSidebar() {
             >
               <div className="relative aspect-square size-8 overflow-hidden rounded-lg">
                 <Image
-                  src="/images/logo_womai_1x1.png"
+                  src="/images/womai_logo.png"
                   alt="WO.M.AI Logo"
                   fill
                   sizes="32px"
@@ -86,8 +86,8 @@ export function AppSidebar() {
                 onClick={closeOnMobile}
                 className="flex items-center justify-between rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               >
-                <span className="truncate">Mesin: {machine.name}</span>
-                <span className="shrink-0 underline">Ganti</span>
+                <span className="truncate">Machine: {machine.name}</span>
+                <span className="shrink-0 underline">Change</span>
               </Link>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -172,7 +172,7 @@ export function AppSidebar() {
               ))}
               {machineSessions.length === 0 && (
                 <p className="text-muted-foreground px-2 py-1.5 text-sm">
-                  Belum ada percakapan.
+                  No conversations yet.
                 </p>
               )}
             </SidebarMenu>
@@ -194,11 +194,11 @@ export function AppSidebar() {
             >
               <SidebarMenuButton
                 type="submit"
-                tooltip="Keluar"
+                tooltip="Log out"
                 className="w-full"
               >
                 <LogOut />
-                <span>Keluar</span>
+                <span>Log out</span>
               </SidebarMenuButton>
             </form>
           </SidebarMenuItem>

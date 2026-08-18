@@ -73,11 +73,11 @@ async def upload_pdf(
     user: User = Depends(require_role("engineer")),
 ):
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="File harus berformat .pdf")
+        raise HTTPException(status_code=400, detail="File must be a .pdf")
 
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     if machine is None:
-        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Machine not found")
 
     file_bytes = await file.read()
     doc_name = file.filename.rsplit(".", 1)[0]
@@ -142,7 +142,7 @@ async def upload_pdf(
         document.rejection_reason = "no_chunks_extracted"
         document.processed_at = datetime.now(timezone.utc)
         db.commit()
-        raise HTTPException(status_code=422, detail="Tidak ada konten yang bisa di-chunk dari dokumen ini")
+        raise HTTPException(status_code=422, detail="No content could be chunked from this document")
 
     document.file_sha256 = dup_result.file_hash
 
@@ -171,7 +171,7 @@ async def upload_pdf(
         document.rejection_reason = "postgres_commit_failed"
         db.commit()
         logger.exception("upload_pdf: failed to commit chunks to Postgres")
-        raise HTTPException(status_code=500, detail="Gagal menyimpan chunk ke database") from None
+        raise HTTPException(status_code=500, detail="Failed to save chunks to the database") from None
 
     try:
         # embed_texts is now a blocking HTTP call to embedding-service (see
@@ -205,7 +205,7 @@ async def upload_pdf(
         document.processed_at = datetime.now(timezone.utc)
         db.commit()
         logger.exception("upload_pdf: failed to upsert embeddings to Chroma")
-        raise HTTPException(status_code=500, detail="Gagal menyimpan embedding ke Chroma (retry manual diperlukan)") from None
+        raise HTTPException(status_code=500, detail="Failed to save embeddings to Chroma (manual retry required)") from None
 
     document.status = "completed"
     document.processed_at = datetime.now(timezone.utc)
@@ -225,7 +225,7 @@ async def upload_pdf(
 def get_document_chunks(document_id: str, db: Session = Depends(get_db)):
     document = db.query(Document).filter(Document.id == document_id).first()
     if document is None:
-        raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Document not found")
     chunks = (
         db.query(DocumentChunk)
         .filter(DocumentChunk.document_id == document.id)
@@ -272,6 +272,6 @@ def delete_document(
 ):
     document = db.query(Document).filter(Document.id == document_id).first()
     if document is None:
-        raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Document not found")
     _delete_document_fully(db, document)
     return None

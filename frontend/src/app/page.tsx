@@ -5,53 +5,53 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
-  { href: "#cara-kerja", label: "Cara Kerja" },
-  { href: "#arsitektur", label: "Arsitektur" },
-  { href: "#kontak", label: "Kontak" },
+  { href: "#cara-kerja", label: "How It Works" },
+  { href: "#arsitektur", label: "Architecture" },
+  { href: "#kontak", label: "Contact" },
 ];
 
 const CHIP_ROW = [
   "predict_failure()",
   "explain_prediction()",
   "retrieve_sop()",
-  "TWF · Keausan tool",
-  "HDF · Pembuangan panas",
-  "PWF · Daya",
-  "OSF · Beban berlebih",
-  "RNF · Acak",
+  "TWF · Tool Wear",
+  "HDF · Heat Dissipation",
+  "PWF · Power",
+  "OSF · Overstrain",
+  "RNF · Random",
   "XGBoost",
   "SHAP",
   "RAG SOP",
 ];
 
 const STATS = [
-  { value: "10.000", label: "titik data AI4I 2020 melatih model" },
-  { value: "5", label: "mode kegagalan mesin berputar dikenali" },
+  { value: "10,000", label: "AI4I 2020 data points trained the model" },
+  { value: "5", label: "rotating-machine failure modes recognized" },
 ];
 
 const STEPS = [
   {
     number: "1",
-    title: "Ceritakan kondisinya",
+    title: "Describe the condition",
     description:
-      "Tanpa form, tanpa kode mesin. Cukup kalimat seperti yang kamu ucapkan ke rekan satu shift.",
-    imageLabel: "Foto: teknisi mengetik di ponsel dekat mesin",
+      "No forms, no machine codes. Just a sentence like the one you'd say to a teammate on shift.",
+    imageLabel: "Photo: technician typing on a phone near a machine",
     imagePath: "/images/step_describe.webp",
   },
   {
     number: "2",
-    title: "Tiga tool bekerja",
+    title: "Three tools at work",
     description:
-      "Model ML memprediksi kegagalan, SHAP menjelaskan alasannya, RAG mengambil langkah dari SOP maintenance.",
-    imageLabel: "Foto: panel kontrol / sensor mesin",
+      "The ML model predicts the failure, SHAP explains why, and RAG pulls the steps from the maintenance SOP.",
+    imageLabel: "Photo: control panel / machine sensors",
     imagePath: "/images/step_convert.webp",
   },
   {
     number: "3",
-    title: "Eksekusi rencananya",
+    title: "Execute the plan",
     description:
-      "Checklist tindakan berprioritas dengan estimasi waktu, plus hitungan Rupiah bila perbaikan ditunda.",
-    imageLabel: "Foto: teknisi melakukan perbaikan",
+      "A prioritized action checklist with time estimates, plus the cost if the repair is delayed.",
+    imageLabel: "Photo: technician performing a repair",
     imagePath: "/images/step_execute.webp",
   },
 ];
@@ -67,7 +67,7 @@ function ChatDemo() {
           <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
         </span>
         <span className="font-mono text-xs tracking-wider uppercase">
-          WO.M.AI · Line Produksi 3
+          WO.M.AI · Production Line 3
         </span>
       </div>
       <div className="flex flex-col gap-3 p-4 text-sm">
@@ -75,8 +75,8 @@ function ChatDemo() {
           className="animate-fade-up self-end rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-primary-foreground"
           style={{ animationDelay: "0.2s" }}
         >
-          motor line 3 suhu prosesnya 310K, torsi 45 Nm, sudah dipakai 200
-          menit sejak ganti tool
+          line 3 motor process temp is 310K, torque 45 Nm, been running 200
+          minutes since the last tool change
         </div>
         <div
           className="animate-fade-up flex w-fit flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 font-mono text-xs text-red-700"
@@ -86,25 +86,25 @@ function ChatDemo() {
           <span className="text-red-300">|</span>
           <span>Heat Dissipation Failure</span>
           <span className="text-red-300">|</span>
-          <span>Risiko tinggi</span>
+          <span>High risk</span>
         </div>
         <div
           className="animate-fade-up rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5"
           style={{ animationDelay: "1.5s" }}
         >
-          Pembuangan panas tidak efektif: selisih suhu udara dan proses terlalu
-          sempit. Turunkan beban ke 50% dan periksa sistem pendingin. Kerugian
-          bila ditunda 24 jam: Rp300.000.000.
+          Heat dissipation is ineffective: the gap between air and process
+          temperature is too narrow. Reduce load to 50% and check the
+          cooling system. Cost of a 24-hour delay: Rp300,000,000.
         </div>
         <div
           className="animate-fade-up text-muted-foreground flex items-center gap-2 px-1 font-mono text-xs"
           style={{ animationDelay: "2.1s" }}
         >
-          <span>Rencana tindakan</span>
+          <span>Action plan</span>
           <span>·</span>
-          <span>5 langkah</span>
+          <span>5 steps</span>
           <span>·</span>
-          <span>±120 menit</span>
+          <span>±120 min</span>
         </div>
       </div>
     </div>
@@ -120,7 +120,7 @@ export default function LandingPage() {
           <Link href="/" className="flex items-center gap-2 pl-1">
             <div className="relative size-8 overflow-hidden rounded-lg shadow-sm">
               <Image
-                src="/images/logo_womai_1x1.png"
+                src="/images/womai_logo.png"
                 alt="WO.M.AI Logo"
                 fill
                 sizes="32px"
@@ -146,7 +146,7 @@ export default function LandingPage() {
             href="/mesin"
             className={cn(buttonVariants({ size: "sm" }), "rounded-full")}
           >
-            Buka Aplikasi
+            Open App
           </Link>
         </nav>
       </header>
@@ -158,7 +158,7 @@ export default function LandingPage() {
           <div className="absolute inset-0">
             <Image
               src="/images/hero_factory.webp"
-              alt="Lini produksi pabrik"
+              alt="Factory production line"
               fill
               priority
               className="object-cover opacity-40"
@@ -169,21 +169,22 @@ export default function LandingPage() {
           <div className="relative flex flex-col gap-12 p-6 sm:p-12">
             <div className="flex max-w-3xl flex-col gap-6 pt-6 sm:pt-10">
               <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight text-balance sm:text-6xl lg:text-7xl">
-                Mesin selalu memberi tanda sebelum berhenti.
+                Machines always signal before they stop.
               </h1>
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10">
                   <ArrowDown className="size-4" />
                 </span>
                 <p className="max-w-sm text-sm text-blue-100/90">
-                  Asisten AI untuk tim maintenance pabrik. Prediksi kegagalan,
-                  alasan, dan rencana tindakan dari satu kalimat teknisi, untuk
-                  setiap mesin di lini produksimu.
+                  An AI assistant for factory maintenance teams. Failure
+                  prediction, reasoning, and an action plan from one
+                  technician&apos;s sentence, for every machine on your
+                  production line.
                 </p>
               </div>
             </div>
 
-            {/* Kartu anotasi mengambang */}
+            {/* Floating annotation card */}
             <div className="flex justify-end">
               <Link
                 href="/mesin"
@@ -194,10 +195,10 @@ export default function LandingPage() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold">
-                    Prediksi dalam hitungan detik
+                    Prediction in seconds
                   </span>
                   <span className="text-muted-foreground block truncate text-xs">
-                    Heat Dissipation Failure · Risiko tinggi · 5 langkah
+                    Heat Dissipation Failure · High risk · 5 steps
                   </span>
                 </span>
                 <ArrowRight className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
@@ -214,7 +215,7 @@ export default function LandingPage() {
             <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-blue-200/50 bg-slate-100 shadow-sm">
               <Image
                 src="/images/industrial_motor.webp"
-                alt="Motor industri"
+                alt="Industrial motor"
                 fill
                 sizes="(max-width: 768px) 50vw, 33vw"
                 className="object-cover transition-transform duration-500 hover:scale-105"
@@ -223,7 +224,7 @@ export default function LandingPage() {
             <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-blue-200/50 bg-slate-100 shadow-sm">
               <Image
                 src="/images/maintenance_team.webp"
-                alt="Tim maintenance"
+                alt="Maintenance team"
                 fill
                 sizes="(max-width: 768px) 50vw, 33vw"
                 className="object-cover transition-transform duration-500 hover:scale-105"
@@ -242,18 +243,18 @@ export default function LandingPage() {
               ))}
             </div>
             <p className="text-muted-foreground text-xs">
-              Dirancang bersama alur kerja teknisi lapangan.
+              Designed alongside field technicians&apos; workflow.
             </p>
           </div>
         </div>
         <p className="font-heading text-2xl leading-snug font-medium text-slate-400 sm:text-3xl lg:text-4xl">
-          Downtime tak terencana menggerus jutaan Rupiah per jam.{" "}
+          Unplanned downtime burns through millions of Rupiah every hour.{" "}
           <span className="text-slate-900">
-            WO.M.AI menerjemahkan keluhan teknisi menjadi prediksi kegagalan
-            terkalibrasi untuk seluruh mesin di pabrikmu, lengkap dengan alasan
-            dan langkah perbaikan,
+            WO.M.AI turns a technician&apos;s complaint into a calibrated
+            failure prediction for every machine in your factory, complete
+            with the reasoning and repair steps,
           </span>{" "}
-          sebelum mesin benar-benar berhenti.
+          before the machine actually stops.
         </p>
       </section>
 
@@ -274,13 +275,13 @@ export default function LandingPage() {
       {/* Stats + foto */}
       <section className="mx-auto max-w-7xl px-6 py-16 lg:py-24">
         <h2 className="font-heading mx-auto max-w-lg pb-12 text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Perencanaan kerja maintenance yang berbasis data.
+          Data-driven maintenance work planning.
         </h2>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="relative aspect-square overflow-hidden rounded-2xl border border-blue-200/50 bg-slate-100 shadow-sm">
             <Image
               src="/images/fb_factory.webp"
-              alt="Pabrik F&B skala menengah"
+              alt="Mid-size F&B factory"
               fill
               sizes="(max-width: 768px) 50vw, 25vw"
               className="object-cover transition-transform duration-500 hover:scale-105"
@@ -302,7 +303,7 @@ export default function LandingPage() {
           <div className="relative aspect-square overflow-hidden rounded-2xl border border-blue-200/50 bg-slate-100 shadow-sm">
             <Image
               src="/images/machine_spindle.webp"
-              alt="Detail spindle / tool mesin"
+              alt="Detail of machine spindle / tool"
               fill
               sizes="(max-width: 768px) 50vw, 25vw"
               className="object-cover transition-transform duration-500 hover:scale-105"
@@ -327,10 +328,10 @@ export default function LandingPage() {
       {/* Cara kerja */}
       <section id="cara-kerja" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-16">
         <p className="text-muted-foreground pb-3 font-mono text-xs tracking-[0.2em] uppercase">
-          Cara kerja
+          How it works
         </p>
         <h2 className="font-heading max-w-md pb-10 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Dari keluhan teknisi ke rencana tindakan.
+          From a technician&apos;s complaint to an action plan.
         </h2>
         <ol className="grid gap-4 sm:grid-cols-3">
           {STEPS.map((step) => (
@@ -373,22 +374,23 @@ export default function LandingPage() {
         </div>
         <div className="flex flex-col items-start gap-5 lg:order-1">
           <p className="text-muted-foreground font-mono text-xs tracking-[0.2em] uppercase">
-            Di balik jawaban
+            Behind the answer
           </p>
           <h2 className="font-heading max-w-md text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Bahasa boleh luwes. Keputusan harus terukur.
+            Language can be casual. Decisions must be measured.
           </h2>
           <p className="text-muted-foreground max-w-lg text-sm leading-relaxed">
-            Prediksi datang dari model XGBoost/Random Forest yang dilatih pada
-            dataset AI4I 2020, bukan dari tebakan model bahasa. Probabilitasnya
-            terkalibrasi dan setiap prediksi disertai dekomposisi SHAP. LLM
-            hanya bertugas memahami kalimat teknisi dan menyusun jawaban.
+            The prediction comes from an XGBoost/Random Forest model trained
+            on the AI4I 2020 dataset, not a language model&apos;s guess. Its
+            probability is calibrated, and every prediction comes with a
+            SHAP breakdown. The LLM&apos;s only job is to understand the
+            technician&apos;s sentence and compose the answer.
           </p>
           <Link
             href="/mesin"
             className={cn(buttonVariants({ size: "lg" }), "gap-2 rounded-full")}
           >
-            Mulai Percakapan <ArrowRight className="size-4" />
+            Start a Conversation <ArrowRight className="size-4" />
           </Link>
         </div>
       </section>
@@ -399,11 +401,11 @@ export default function LandingPage() {
           <div className="flex flex-col justify-between gap-8 sm:flex-row">
             <div className="flex flex-col gap-3">
               <span className="font-mono text-xs tracking-[0.2em] uppercase">
-                Siap mencoba?
+                Ready to try it?
               </span>
               <p className="max-w-sm text-sm">
-                Mulai dari kalimat pertamamu: &quot;motor line 2 getarannya
-                kasar sejak pagi&quot;
+                Start with your first sentence: &quot;line 2 motor&apos;s
+                vibration has been rough since this morning&quot;
               </p>
               <Link
                 href="/mesin"
@@ -412,24 +414,24 @@ export default function LandingPage() {
                   "w-fit gap-2 rounded-full",
                 )}
               >
-                Buka WO.M.AI <ArrowRight className="size-4" />
+                Open WO.M.AI <ArrowRight className="size-4" />
               </Link>
             </div>
             <div className="flex gap-14 text-sm">
               <div className="flex flex-col gap-2">
                 <span className="font-mono text-xs tracking-wide text-blue-300/60 uppercase">
-                  Aplikasi
+                  App
                 </span>
                 <Link href="/mesin" className="hover:text-white">
                   Chat
                 </Link>
                 <Link href="/riwayat" className="hover:text-white">
-                  Riwayat
+                  History
                 </Link>
               </div>
               <div className="flex flex-col gap-2">
                 <span className="font-mono text-xs tracking-wide text-blue-300/60 uppercase">
-                  Kompetisi
+                  Competition
                 </span>
                 <span>COMPFEST 18</span>
                 <span>AI Innovation Challenge</span>
@@ -441,17 +443,17 @@ export default function LandingPage() {
           </div>
           <p className="border-t border-blue-900 pt-6 text-xs">
             Dataset: AI4I 2020 Predictive Maintenance Dataset (Stephan Matzka),
-            lisensi CC-BY-NC-SA-4.0.
+            licensed CC-BY-NC-SA-4.0.
           </p>
         </div>
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 pt-5 pb-2 text-xs text-slate-500 sm:flex-row">
-          <span>© 2026 WO.M.AI. Seluruh hak cipta.</span>
+          <span>© 2026 WO.M.AI. All rights reserved.</span>
           <div className="flex items-center gap-5">
             <Link href="/mesin" className="hover:text-slate-900">
               Chat
             </Link>
             <Link href="/riwayat" className="hover:text-slate-900">
-              Riwayat
+              History
             </Link>
             <a
               href="https://github.com/ArielSulton/womai-ai"

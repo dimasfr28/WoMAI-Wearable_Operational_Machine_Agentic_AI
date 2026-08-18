@@ -26,7 +26,7 @@ import { useActiveMachine } from "@/hooks/use-active-machine";
 import { useSessions } from "@/hooks/use-sessions";
 import { deleteMachine } from "@/lib/machines";
 import type { Machine } from "@/lib/types";
-import { RISK_BADGE } from "@/lib/risk";
+import { RISK_BADGE, RISK_LABEL } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 
 export default function MesinPage() {
@@ -48,14 +48,14 @@ export default function MesinPage() {
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Pilih Mesin</h1>
+          <h1 className="text-xl font-semibold">Select Machine</h1>
           <p className="text-sm text-muted-foreground">
-            Pilih mesin untuk memulai Machine Diagnosis, atau kelola daftar
-            mesin di bawah.
+            Select a machine to start Machine Diagnosis, or manage the
+            machine list below.
           </p>
         </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
-          Tambah Mesin
+          Add Machine
         </Button>
       </div>
 
@@ -63,10 +63,10 @@ export default function MesinPage() {
         <div className="flex flex-col items-center gap-4 py-16">
           <Factory className="size-12 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            Belum ada mesin terdaftar.
+            No machines registered yet.
           </p>
           <Button onClick={() => setAddOpen(true)}>
-            Tambah Mesin Pertama
+            Add First Machine
           </Button>
         </div>
       ) : (
@@ -107,42 +107,42 @@ export default function MesinPage() {
                         onClick={() => setEditMachine(m)}
                       >
                         <Pencil className="size-4" />
-                        <span className="sr-only">Edit mesin</span>
+                        <span className="sr-only">Edit machine</span>
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger
                           render={<Button variant="ghost" size="icon" />}
                         >
                           <Trash2 className="size-4" />
-                          <span className="sr-only">Hapus mesin</span>
+                          <span className="sr-only">Delete machine</span>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Hapus mesin?</AlertDialogTitle>
+                            <AlertDialogTitle>Delete machine?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Mesin &quot;{m.name}&quot; akan dihapus. Sesi
-                              lama yang sudah terekam tetap tersimpan dengan
-                              nama mesin saat itu.
+                              Machine &quot;{m.name}&quot; will be deleted.
+                              Previously recorded sessions stay saved under
+                              the machine name they had at the time.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={async () => {
                                 try {
                                   await deleteMachine(m.id);
-                                  toast.success("Mesin dihapus.");
+                                  toast.success("Machine deleted.");
                                 } catch (err) {
                                   unstable_rethrow(err);
                                   toast.error(
                                     err instanceof Error
                                       ? err.message
-                                      : "Gagal menghapus mesin.",
+                                      : "Failed to delete machine.",
                                   );
                                 }
                               }}
                             >
-                              Hapus
+                              Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -151,19 +151,19 @@ export default function MesinPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-muted-foreground">
-                      {m.documentCount} dokumen · {m.runCount} run ·{" "}
-                      {sessionCount} sesi
+                      {m.documentCount} documents · {m.runCount} runs ·{" "}
+                      {sessionCount} sessions
                     </span>
                     {lastPrediction ? (
                       <Badge
                         className={cn(RISK_BADGE[lastPrediction.riskLevel])}
                       >
                         {lastPrediction.label
-                          ? `Berpotensi gagal · risiko ${lastPrediction.riskLevel}`
+                          ? `Potential failure · ${RISK_LABEL[lastPrediction.riskLevel]} risk`
                           : "Normal"}
                       </Badge>
                     ) : (
-                      <Badge variant="secondary">Belum ada prediksi</Badge>
+                      <Badge variant="secondary">No prediction yet</Badge>
                     )}
                     {sessionCount > 0 && (
                       <Link
@@ -172,7 +172,7 @@ export default function MesinPage() {
                         className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                       >
                         <MessageSquareText className="size-3.5" />
-                        Lihat sesi
+                        View sessions
                       </Link>
                     )}
                   </div>

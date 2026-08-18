@@ -16,6 +16,7 @@ from fastapi import HTTPException
 
 from app.api.deps import get_current_user_optional, require_role
 from app.api.routes_report import _run_report_pipeline
+from app.config import settings
 from app.db.models import Document, DocumentChunk, Machine, SensorReading, SensorRun, User
 from app.db.session import get_db
 from app.ingestion.chunking_sensor import ReadingLike, RunLike, build_run_chunk
@@ -47,7 +48,7 @@ router = APIRouter(prefix="/sensor", tags=["sensor"])
 def _require_machine(db: Session, machine_id: str) -> Machine:
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
     if machine is None:
-        raise HTTPException(status_code=404, detail="Mesin tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Machine not found")
     return machine
 
 
@@ -164,14 +165,18 @@ def _close_run_and_build_chunk(db: Session, run: SensorRun) -> None:
 
 
 def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) -> SensorRun:
-    """Section 6.3 — tentukan run terbuka terakhir (untuk `machine_id` ini) atau
-    buka run baru. Difilter by machine_id supaya reading dari satu mesin tidak
-    pernah nyasar masuk run milik mesin lain.
+    """Section 6.3 — determine the last open run for this `machine_id`, or open
+    a new one. Filtered by machine_id so a reading from one machine never
+    lands in another machine's run.
 
-    Aturan run murni berdasarkan tool_wear_min (naik = run sama, turun = run
-    baru) — tool wear reset ke ~0 setiap kali sesi kerja baru dimulai, jadi
-    penurunan adalah sinyal run baru yang bisa diandalkan tanpa perlu batas
-    waktu/lompatan tambahan."""
+    Same-run rule: tool_wear_min must be non-decreasing AND the elapsed
+    wall-clock time between the two readings must be within
+    settings.RUN_SYNC_TOLERANCE_MINUTES of the tool-wear delta — tool wear
+    normally accumulates roughly 1:1 with real time during continuous
+    operation, so a reading whose wear/time relationship is wildly out of
+    sync (e.g. a large real-world gap, or replayed/duplicate data) starts a
+    new run even though wear itself didn't decrease. A wear decrease still
+    always forces a new run on its own, unchanged from before."""
     open_run = (
         db.query(SensorRun)
         .filter_by(is_closed=False, machine_id=machine_id)
@@ -192,7 +197,15 @@ def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) ->
     if last_reading is None:
         return _open_new_run(db, machine_id, new_reading)
 
-    same_run = float(new_reading.tool_wear_min) >= float(last_reading.tool_wear_min)
+    wear_delta = float(new_reading.tool_wear_min) - float(last_reading.tool_wear_min)
+    timestamp_delta_minutes = (
+        new_reading.timestamp - last_reading.reading_timestamp
+    ).total_seconds() / 60
+
+    same_run = (
+        wear_delta >= 0
+        and abs(timestamp_delta_minutes - wear_delta) <= settings.RUN_SYNC_TOLERANCE_MINUTES
+    )
 
     if same_run:
         open_run.sample_count += 1
@@ -285,6 +298,10 @@ def submit_reading(
         pred_result,
         horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
         horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
+        run_label=run.run_label,
+        health_score=report.prediction.health_score if report else None,
+        top_feature_name=report.shap.features[0].feature_name if report and report.shap.features else None,
+        cause_analysis_short=report.cause_analysis_short if report else None,
     )
 
     return SensorReadingSubmitResponseOut(
@@ -367,6 +384,10 @@ def submit_readings_batch(
             pred_result,
             horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
             horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
+            run_label=run.run_label,
+            health_score=report.prediction.health_score if report else None,
+            top_feature_name=report.shap.features[0].feature_name if report and report.shap.features else None,
+            cause_analysis_short=report.cause_analysis_short if report else None,
         )
 
         out.append(

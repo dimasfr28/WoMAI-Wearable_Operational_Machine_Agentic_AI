@@ -155,15 +155,15 @@ def execute_bot_tool(tool_name: str, args: dict[str, Any] | None, db: Session) -
         elif norm_name in ("get_machine_info", "get_machine_info_tool"):
             machine_id = args.get("machine_id")
             if not machine_id:
-                return json.dumps({"error": "Argumen 'machine_id' diperlukan untuk get_machine_info."}, ensure_ascii=False)
+                return json.dumps({"error": "Argument 'machine_id' is required for get_machine_info."}, ensure_ascii=False)
             res = get_machine_info_tool(db=db, machine_id=str(machine_id))
             if res is None:
-                return json.dumps({"error": f"Mesin dengan ID '{machine_id}' tidak ditemukan."}, ensure_ascii=False)
+                return json.dumps({"error": f"Machine with ID '{machine_id}' not found."}, ensure_ascii=False)
             return json.dumps(res, default=str, ensure_ascii=False)
 
         else:
-            return json.dumps({"error": f"Tool '{tool_name}' tidak dikenal."}, ensure_ascii=False)
+            return json.dumps({"error": f"Unknown tool '{tool_name}'."}, ensure_ascii=False)
 
     except Exception as exc:
         logger.exception("execute_bot_tool failed for tool '%s'", tool_name)
-        return json.dumps({"error": f"Eksekusi tool gagal: {str(exc)}"}, ensure_ascii=False)
+        return json.dumps({"error": f"Tool execution failed: {str(exc)}"}, ensure_ascii=False)
