@@ -51,7 +51,12 @@ class Settings(BaseSettings):
     PDF_LIBRARY_DIR: str = "/data/pdf_library"
 
     # --- Machine Report PDF (rancangan.txt Section 7) ---
-    REPORTS_DIR: str = "/app/reports"
+    # NOT /app/reports: /app is bind-mounted from the host in dev (dev.compose.yaml)
+    # and watched by uvicorn --reload — every generated Machine Report PDF landing
+    # there triggered a full app reload (regenerating JWT_SECRET mid-session, see
+    # get_settings(), and interrupting whatever request was in flight). /data/reports
+    # sits outside the watched tree, same convention as PDF_LIBRARY_DIR below.
+    REPORTS_DIR: str = "/data/reports"
 
     # --- SearXNG ---
     SEARXNG_BASE_URL: str = "http://searxng:8080"
@@ -77,6 +82,14 @@ class Settings(BaseSettings):
     # app/notifications/telegram.py) ---
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
+
+    # --- Sensor run clustering (assign_run_id, routes_sensor.py) ---
+    # Tolerance between two consecutive readings' elapsed wall-clock time and
+    # their tool_wear_min delta for them to still count as the same run —
+    # generous relative to the ESP32's ~60s submit interval so normal
+    # jitter/batching never false-splits a run, while a genuinely stale or
+    # replayed reading (minutes-to-hours of mismatch) still does.
+    RUN_SYNC_TOLERANCE_MINUTES: float = 10.0
 
 
 @lru_cache
