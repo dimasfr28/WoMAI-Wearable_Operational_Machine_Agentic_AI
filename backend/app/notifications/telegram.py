@@ -25,6 +25,10 @@ def notify_new_reading(
     pred_result: ClasificationResult,
     horizon_probability: float | None = None,
     horizon_minutes: int | None = None,
+    run_label: str | None = None,
+    health_score: float | None = None,
+    top_feature_name: str | None = None,
+    cause_analysis_short: str | None = None,
 ) -> None:
     """Fire-and-forget: never raises, so a Telegram outage can never break
     sensor ingestion. No-op if either config value is unset.
@@ -33,15 +37,29 @@ def notify_new_reading(
     Failure in +N Minute" model (_run_report_pipeline's horizon_result) —
     optional because that pipeline step can fail independently of the main
     classification (see routes_report.py's own try/except around it), so
-    callers may not always have it available yet when they call this."""
+    callers may not always have it available yet when they call this.
+
+    run_label/health_score/top_feature_name/cause_analysis_short add detail
+    beyond the bare label+probability so an operator can act on the alert
+    without opening the dashboard — all optional/nullable because callers
+    may not always have every piece (e.g. cause_analysis_short is only
+    computed when pred_result.label is True)."""
     if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
         return
 
     probability_pct = pred_result.probability * 100
     if pred_result.label:
-        text = f"⚠️ {machine_name} — FAILURE diprediksi ({probability_pct:.1f}%)"
+        text = f"⚠️ {machine_name} — FAILURE predicted ({probability_pct:.1f}%)"
     else:
         text = f"✅ {machine_name} — Normal ({probability_pct:.1f}%)"
+    if run_label:
+        text += f"\nRun: {run_label}"
+    if health_score is not None:
+        text += f"\nHealth Score: {health_score:.1f}/100"
+    if top_feature_name:
+        text += f"\nTop contributing factor: {top_feature_name}"
+    if cause_analysis_short:
+        text += f"\nRoot cause: {cause_analysis_short}"
     if horizon_probability is not None:
         text += f"\nFailure in +{horizon_minutes or 10} Minute: {horizon_probability * 100:.1f}%"
 

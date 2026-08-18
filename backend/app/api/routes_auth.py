@@ -36,18 +36,18 @@ def register(
     if user_count > 0:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Registrasi user baru memerlukan otentikasi admin setelah user pertama dibuat. "
-            "Gunakan endpoint ini dengan Authorization: Bearer <admin_token>.",
+            detail="Registering a new user requires admin authentication once the first user exists. "
+            "Use this endpoint with Authorization: Bearer <admin_token>.",
         )
 
     if payload.role not in VALID_ROLES:
-        raise HTTPException(status_code=400, detail=f"role harus salah satu dari {VALID_ROLES}")
+        raise HTTPException(status_code=400, detail=f"role must be one of {VALID_ROLES}")
 
     existing = db.query(User).filter(
         (User.username == payload.username) | (User.email == payload.email)
     ).first()
     if existing:
-        raise HTTPException(status_code=409, detail="username atau email sudah terdaftar")
+        raise HTTPException(status_code=409, detail="username or email is already registered")
 
     user = User(
         username=payload.username,
@@ -77,12 +77,12 @@ def register_by_admin(
 ):
     """Explicit admin-authenticated registration path (Section 7 contract, role=admin)."""
     if payload.role not in VALID_ROLES:
-        raise HTTPException(status_code=400, detail=f"role harus salah satu dari {VALID_ROLES}")
+        raise HTTPException(status_code=400, detail=f"role must be one of {VALID_ROLES}")
     existing = db.query(User).filter(
         (User.username == payload.username) | (User.email == payload.email)
     ).first()
     if existing:
-        raise HTTPException(status_code=409, detail="username atau email sudah terdaftar")
+        raise HTTPException(status_code=409, detail="username or email is already registered")
     user = User(
         username=payload.username,
         email=payload.email,
@@ -107,9 +107,9 @@ def register_by_admin(
 def login(payload: UserLoginIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == payload.username).first()
     if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Username atau password salah")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User tidak aktif")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not active")
     token = create_access_token(str(user.id), user.role)
     return TokenOut(access_token=token)
 
@@ -131,10 +131,10 @@ def update_user_role(
     admin: User = Depends(require_role("admin")),
 ):
     if payload.role not in VALID_ROLES:
-        raise HTTPException(status_code=400, detail=f"role harus salah satu dari {VALID_ROLES}")
+        raise HTTPException(status_code=400, detail=f"role must be one of {VALID_ROLES}")
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+        raise HTTPException(status_code=404, detail="User not found")
     user.role = payload.role
     db.commit()
     db.refresh(user)
