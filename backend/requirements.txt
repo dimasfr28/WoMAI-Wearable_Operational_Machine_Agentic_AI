@@ -45,6 +45,8 @@ langchain-community==0.3.13
 langgraph==0.2.60
 groq==0.13.0
 google-genai==2.8.0
+# LLM-as-judge (Faithfulness) for CRAG root-cause answers, see app/rag/judge.py.
+ragas==0.4.3
 
 # Parsing / misc
 # Only consumer in this codebase is chunking_docs.py's BeautifulSoup(text,
