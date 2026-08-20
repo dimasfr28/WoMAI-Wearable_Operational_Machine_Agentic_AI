@@ -99,6 +99,13 @@ class Settings(BaseSettings):
     # once real ESP32 cadence/tuning is settled.
     RUN_MAX_SAME_RUN_GAP_MINUTES: float = 2.0
 
+    # --- Simulation auto-start (SimulationManager, routes_sensor.py) ---
+    # Delay after backend startup before auto-starting demo simulation for
+    # every existing machine — SimulationManager's state is in-memory only,
+    # so a process restart otherwise leaves it dormant until some reading
+    # arrives via submit_reading() to re-trigger it.
+    SIMULATION_AUTOSTART_DELAY_SECONDS: float = 120.0
+
 
 @lru_cache
 def get_settings() -> Settings:
