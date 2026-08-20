@@ -41,7 +41,7 @@ export default function MesinPage() {
 
   function selectMachine(m: Machine) {
     setActiveMachine(m);
-    router.push("/machine-diagnosis");
+    router.push("/chat");
   }
 
   return (
@@ -50,7 +50,7 @@ export default function MesinPage() {
         <div>
           <h1 className="text-xl font-semibold">Select Machine</h1>
           <p className="text-sm text-muted-foreground">
-            Select a machine to start Machine Diagnosis, or manage the
+            Select a machine to start a consultation, or manage the
             machine list below.
           </p>
         </div>
