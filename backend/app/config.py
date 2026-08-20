@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     # jitter/batching never false-splits a run, while a genuinely stale or
     # replayed reading (minutes-to-hours of mismatch) still does.
     RUN_SYNC_TOLERANCE_MINUTES: float = 10.0
+    # Hard cap on same-run continuation, independent of the sync-tolerance
+    # check above — a fixed-cadence data source (e.g. SimulationManager,
+    # routes_sensor.py) can keep tool_wear perfectly in sync with elapsed
+    # time indefinitely, which would otherwise never trip the sync check and
+    # let a single run run forever. TEMPORARY: set low (2 min) for demoing
+    # the simulation feature with a fresh run/report every cycle; revisit
+    # once real ESP32 cadence/tuning is settled.
+    RUN_MAX_SAME_RUN_GAP_MINUTES: float = 2.0
 
 
 @lru_cache
