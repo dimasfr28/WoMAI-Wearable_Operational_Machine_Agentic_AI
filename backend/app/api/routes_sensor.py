@@ -52,6 +52,18 @@ def _require_machine(db: Session, machine_id: str) -> Machine:
     return machine
 
 
+def _is_zero_reading(reading: SensorReadingIn) -> bool:
+    """A raw value of exactly 0 on any of the 4 sensor channels indicates a
+    disconnected/faulty sensor on the IoT (ESP32) side, not a real
+    measurement — reject the whole reading rather than storing it."""
+    return (
+        reading.air_temperature_k == 0
+        or reading.process_temperature_k == 0
+        or reading.rotational_speed_rpm == 0
+        or reading.tool_wear_min == 0
+    )
+
+
 def _open_new_run(db: Session, machine_id: str, reading: SensorReadingIn) -> SensorRun:
     """Section 6.3 — buka run baru untuk `machine_id` tertentu. `failure_count`
     mulai dari 0 karena `machine_failure` untuk reading ini belum diketahui pada
@@ -198,7 +210,6 @@ def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) ->
         return _open_new_run(db, machine_id, new_reading)
 
     wear_delta = float(new_reading.tool_wear_min) - float(last_reading.tool_wear_min)
-    print(repr(new_reading.timestamp), repr(last_reading.reading_timestamp))
     timestamp_delta_minutes = (
         new_reading.timestamp - last_reading.reading_timestamp
     ).total_seconds() / 60
@@ -368,6 +379,15 @@ def submit_reading(
     user: User | None = Depends(get_current_user_optional),
 ):
     machine = _require_machine(db, machine_id)
+    if _is_zero_reading(payload):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid sensor reading: one or more values is 0 "
+                "(air_temperature_k, process_temperature_k, rotational_speed_rpm, "
+                "tool_wear_min), which indicates a disconnected/faulty sensor."
+            ),
+        )
     SimulationManager.start_simulation(machine_id)
     run = assign_run_id(payload, db, machine_id)
     reading = SensorReading(
@@ -466,6 +486,14 @@ def submit_readings_batch(
     machine = _require_machine(db, machine_id)
     out = []
     for item in payload.readings:
+        if _is_zero_reading(item):
+            logger.warning(
+                "submit_readings_batch: skipping reading at %s for machine %s — "
+                "one or more values is 0 (disconnected/faulty sensor)",
+                item.timestamp,
+                machine_id,
+            )
+            continue
         run = assign_run_id(item, db, machine_id)
         reading = SensorReading(
             run_id=run.id,
