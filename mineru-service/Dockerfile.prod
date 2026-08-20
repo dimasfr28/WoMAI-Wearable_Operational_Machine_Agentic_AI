@@ -25,7 +25,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# --timeout/--retries: mineru[pipeline] pulls in vLLM + the full CUDA stack
+# (multi-GB wheels) — pip's default 15s read timeout is too short for those
+# on this network and intermittently kills the build with a ReadTimeoutError
+# partway through a large download; a longer per-read timeout plus retries
+# lets it resume instead of failing the whole build.
+RUN pip install --no-cache-dir --timeout 120 --retries 10 -r requirements.txt
 
 # hf-xet (huggingface_hub's newer "xet-bridge" transfer protocol, now a hard
 # dependency pulled in transitively by some HF downloads) hangs/stalls
