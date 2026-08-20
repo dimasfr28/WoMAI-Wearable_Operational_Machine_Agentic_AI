@@ -188,7 +188,14 @@ def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) ->
     operation, so a reading whose wear/time relationship is wildly out of
     sync (e.g. a large real-world gap, or replayed/duplicate data) starts a
     new run even though wear itself didn't decrease. A wear decrease still
-    always forces a new run on its own, unchanged from before."""
+    always forces a new run on its own, unchanged from before.
+
+    AND the elapsed time itself must be within
+    settings.RUN_MAX_SAME_RUN_GAP_MINUTES — a hard cap independent of the
+    sync check above, since a fixed-cadence source (e.g. SimulationManager)
+    can keep wear perfectly in sync with elapsed time forever, which would
+    never trip the sync-tolerance check on its own and let one run grow
+    without bound."""
     open_run = (
         db.query(SensorRun)
         .filter_by(is_closed=False, machine_id=machine_id)
@@ -217,6 +224,7 @@ def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) ->
     same_run = (
         wear_delta >= 0
         and abs(timestamp_delta_minutes - wear_delta) <= settings.RUN_SYNC_TOLERANCE_MINUTES
+        and timestamp_delta_minutes <= settings.RUN_MAX_SAME_RUN_GAP_MINUTES
     )
 
     if same_run:
