@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class SensorSnapshotOut(BaseModel):
@@ -13,6 +13,7 @@ class SensorSnapshotOut(BaseModel):
 
 
 class PredictionOut(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     id: str
     predicted_label: bool
     failure_probability: float
@@ -28,6 +29,7 @@ class HorizonPredictionOut(BaseModel):
     """"Probability Failure in +10 Minute" (rancangan.txt Section 5) — model
     terpisah dari PredictionOut, menjawab pertanyaan berbeda ("akan gagal
     dalam N menit ke depan?", bukan "sedang gagal sekarang?")."""
+    model_config = ConfigDict(protected_namespaces=())
 
     predicted_label: bool
     failure_probability: float

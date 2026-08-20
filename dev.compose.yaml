@@ -89,7 +89,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:3000"
+      - "3002:3000"
 
 volumes:
   mineru_cache:
