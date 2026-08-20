@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import statistics
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from fastapi import HTTPException
@@ -62,6 +62,28 @@ def _is_zero_reading(reading: SensorReadingIn) -> bool:
         or reading.rotational_speed_rpm == 0
         or reading.tool_wear_min == 0
     )
+
+
+# Headers Cloudflare (and cloudflared, for Tunnel) injects into every request
+# it proxies — present only on requests that went through Cloudflare's edge,
+# never on a request hitting this server directly (e.g. curl/Swagger UI
+# against localhost:8002). Peer IP alone can't distinguish these inside
+# Docker: both a genuine localhost request and a tunnel-forwarded one arrive
+# via the same bridge-gateway address from this container's point of view.
+_TUNNEL_HEADERS = ("cf-connecting-ip", "cf-ray", "cf-visitor")
+
+
+def _require_direct_localhost_request(request: Request) -> None:
+    """Rejects any request proxied through Cloudflare Tunnel — this endpoint
+    is meant to accept data only from a direct local caller (Swagger UI at
+    /docs, curl, etc. against localhost:8002). Simulated data never goes
+    through this check at all: SimulationManager writes straight to the DB,
+    it never calls this HTTP endpoint."""
+    if any(h in request.headers for h in _TUNNEL_HEADERS):
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint only accepts direct localhost requests, not requests proxied through a tunnel.",
+        )
 
 
 def _open_new_run(db: Session, machine_id: str, reading: SensorReadingIn) -> SensorRun:
@@ -288,6 +310,19 @@ class SimulationManager:
         t.start()
 
     @classmethod
+    def start_all(cls, db: Session) -> int:
+        """Starts (or leaves already-running) simulation for every machine in
+        the DB — used by the app startup hook (main.py) so a freshly
+        (re)started backend process resumes producing demo data on its own,
+        instead of staying dormant until some reading arrives through
+        submit_reading() to re-trigger it. Returns how many machines it
+        applied to."""
+        machine_ids = [str(m.id) for m in db.query(Machine).all()]
+        for machine_id in machine_ids:
+            cls.start_simulation(machine_id)
+        return len(machine_ids)
+
+    @classmethod
     def _run_simulation(cls, machine_id: str, stop_event: threading.Event):
         from app.db.session import SessionLocal
         from app.db.models import SensorReading, Machine
@@ -385,17 +420,38 @@ def submit_reading(
     machine_id: str,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_current_user_optional),
+    _: None = Depends(_require_direct_localhost_request),
 ):
     machine = _require_machine(db, machine_id)
     if _is_zero_reading(payload):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Invalid sensor reading: one or more values is 0 "
-                "(air_temperature_k, process_temperature_k, rotational_speed_rpm, "
-                "tool_wear_min), which indicates a disconnected/faulty sensor."
-            ),
+        # TEMPORARY DIAGNOSTIC — 400 rejection disabled to see which field is
+        # actually 0 on incoming readings; re-enable the raise below once
+        # confirmed. Logs the zero field(s) instead of blocking the request.
+        zero_fields = [
+            name
+            for name, value in (
+                ("air_temperature_k", payload.air_temperature_k),
+                ("process_temperature_k", payload.process_temperature_k),
+                ("rotational_speed_rpm", payload.rotational_speed_rpm),
+                ("tool_wear_min", payload.tool_wear_min),
+            )
+            if value == 0
+        ]
+        logger.warning(
+            "submit_reading: DIAGNOSTIC — zero-value reading let through, "
+            "machine=%s zero_fields=%s payload=%s",
+            machine_id,
+            zero_fields,
+            payload.model_dump(),
         )
+        # raise HTTPException(
+        #     status_code=400,
+        #     detail=(
+        #         "Invalid sensor reading: one or more values is 0 "
+        #         "(air_temperature_k, process_temperature_k, rotational_speed_rpm, "
+        #         "tool_wear_min), which indicates a disconnected/faulty sensor."
+        #     ),
+        # )
     SimulationManager.start_simulation(machine_id)
     run = assign_run_id(payload, db, machine_id)
     reading = SensorReading(
@@ -488,6 +544,7 @@ def submit_readings_batch(
     payload: SensorReadingBatchIn,
     machine_id: str,
     db: Session = Depends(get_db),
+    _: None = Depends(_require_direct_localhost_request),
 ):
     """Endpoint API untuk DAG (input otomatis, bulk) — Section 7. Belum dipakai
     DAG saat ini, disiapkan supaya integrasi Airflow/Prefect nanti tinggal panggil."""
