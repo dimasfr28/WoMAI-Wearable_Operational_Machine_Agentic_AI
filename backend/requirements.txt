@@ -47,6 +47,11 @@ groq==0.13.0
 google-genai==2.8.0
 # LLM-as-judge (Faithfulness) for CRAG root-cause answers, see app/rag/judge.py.
 ragas==0.4.3
+# instructor's Gemini tool-schema mapping (providers/gemini/utils.py) imports
+# this directly but neither ragas nor instructor declares it as a real
+# dependency — parsing fails with "No module named 'jsonref'" without it
+# pinned explicitly here.
+jsonref==1.1.0
 
 # Parsing / misc
 # Only consumer in this codebase is chunking_docs.py's BeautifulSoup(text,
