@@ -198,6 +198,7 @@ def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) ->
         return _open_new_run(db, machine_id, new_reading)
 
     wear_delta = float(new_reading.tool_wear_min) - float(last_reading.tool_wear_min)
+    print(repr(new_reading.timestamp), repr(last_reading.reading_timestamp))
     timestamp_delta_minutes = (
         new_reading.timestamp - last_reading.reading_timestamp
     ).total_seconds() / 60
@@ -234,6 +235,131 @@ def _bump_failure_count_if_needed(db: Session, run: SensorRun, predicted_label: 
         db.refresh(run)
 
 
+
+import threading
+import time
+from datetime import datetime, timedelta
+import random
+
+class SimulationManager:
+    _tasks = {}
+    _state = {}
+    _stop_events = {}
+
+    @classmethod
+    def start_simulation(cls, machine_id: str):
+        if machine_id in cls._tasks and cls._tasks[machine_id].is_alive():
+            return
+        cls._state[machine_id] = {"tool_wear": 0.0}
+        stop_event = threading.Event()
+        cls._stop_events[machine_id] = stop_event
+        t = threading.Thread(target=cls._run_simulation, args=(machine_id, stop_event), daemon=True)
+        cls._tasks[machine_id] = t
+        t.start()
+
+    @classmethod
+    def restart_simulation(cls, machine_id: str):
+        if machine_id in cls._stop_events:
+            cls._stop_events[machine_id].set()
+        cls._state[machine_id] = {"tool_wear": 0.0}
+        stop_event = threading.Event()
+        cls._stop_events[machine_id] = stop_event
+        t = threading.Thread(target=cls._run_simulation, args=(machine_id, stop_event), daemon=True)
+        cls._tasks[machine_id] = t
+        t.start()
+
+    @classmethod
+    def _run_simulation(cls, machine_id: str, stop_event: threading.Event):
+        from app.db.session import SessionLocal
+        from app.db.models import SensorReading, Machine
+        from app.ml.predictor_clasification import predict_failure
+        from app.schemas.sensor import SensorReadingIn
+        try:
+            while not stop_event.is_set():
+                # Wait 2 minutes (120 seconds), but check stop_event every second so it can be interrupted quickly
+                for _ in range(120):
+                    if stop_event.is_set():
+                        return
+                    time.sleep(1)
+                    
+                db = SessionLocal()
+                try:
+                    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+                    if not machine:
+                        break
+
+                    from datetime import timezone
+                    now = datetime.now(timezone.utc)
+                    
+                    air_temp = round(random.uniform(298.0, 300.0), 1)
+                    proc_temp = round(air_temp + random.uniform(10.0, 11.0), 1)
+                    rpm = random.randint(1300, 2000)
+                    
+                    # Tool wear increases by 2.0 every 2 minutes
+                    cls._state[machine_id]["tool_wear"] += 2.0
+                    
+                    item = SensorReadingIn(
+                        timestamp=now,
+                        air_temperature_k=air_temp,
+                        process_temperature_k=proc_temp,
+                        rotational_speed_rpm=rpm,
+                        tool_wear_min=round(cls._state[machine_id]["tool_wear"], 2)
+                    )
+                    
+                    run = assign_run_id(item, db, machine_id)
+                    reading = SensorReading(
+                        run_id=run.id,
+                        reading_timestamp=item.timestamp,
+                        air_temperature_k=item.air_temperature_k,
+                        process_temperature_k=item.process_temperature_k,
+                        rotational_speed_rpm=item.rotational_speed_rpm,
+                        tool_wear_min=item.tool_wear_min,
+                        machine_failure=None,
+                        input_source="simulation",
+                    )
+                    db.add(reading)
+                    db.commit()
+                    db.refresh(reading)
+                    
+                    feature_row = {
+                        "air_temperature_k": float(reading.air_temperature_k),
+                        "process_temperature_k": float(reading.process_temperature_k),
+                        "rotational_speed_rpm": reading.rotational_speed_rpm,
+                        "tool_wear_min": float(reading.tool_wear_min),
+                    }
+                    pred_result = predict_failure(feature_row)
+                    reading.machine_failure = pred_result.label
+                    db.commit()
+                    db.refresh(reading)
+                    
+                    _bump_failure_count_if_needed(db, run, pred_result.label)
+                    
+                    # Because there is only 1 row, we always trigger the report pipeline
+                    report = None
+                    try:
+                        report = _run_report_pipeline(db, reading, pred_result, machine_id)
+                    except Exception as e:
+                        logger.error(f"Simulation pipeline error: {e}")
+                    
+                    notify_new_reading(
+                                machine.name,
+                                pred_result,
+                                horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
+                                horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
+                                run_label=run.run_label,
+                                health_score=report.prediction.health_score if report else None,
+                                top_feature_name=report.shap.features[0].feature_name if report and report.shap.features else None,
+                                cause_analysis_short=report.cause_analysis_short if report else None,
+                            )
+                except Exception as e:
+                    logger.error(f"Error in simulation task: {e}")
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.error(f"Simulation thread crashed: {e}")
+
+
+
 @router.post("/readings", response_model=SensorReadingSubmitResponseOut)
 def submit_reading(
     payload: SensorReadingIn,
@@ -242,6 +368,7 @@ def submit_reading(
     user: User | None = Depends(get_current_user_optional),
 ):
     machine = _require_machine(db, machine_id)
+    SimulationManager.start_simulation(machine_id)
     run = assign_run_id(payload, db, machine_id)
     reading = SensorReading(
         run_id=run.id,
@@ -526,3 +653,75 @@ def get_readings_history(machine_id: str, db: Session = Depends(get_db)):
         rotational_speed_rpm=_param_stats(rpm_vals),
         tool_wear_min=_param_stats(wear_vals),
     )
+
+
+# --- Added for Simulation ---
+import csv
+import os
+import random
+from datetime import datetime, timedelta
+from fastapi import Query
+from pydantic import BaseModel
+
+class SimulationResponse(BaseModel):
+    message: str
+    file_path: str
+    num_rows: int
+    preview: list[dict]
+
+@router.post("/simulate-csv", response_model=SimulationResponse)
+def simulate_cnc_data(num_rows: int = Query(100, description="Number of rows to generate")):
+    """
+    Generates healthy CNC milling machine data into a CSV file.
+    Each row represents a 5-minute interval.
+    """
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    saved_dir = os.path.join(base_dir, "saved")
+    os.makedirs(saved_dir, exist_ok=True)
+    
+    file_path = os.path.join(saved_dir, "healthy_cnc_data.csv")
+    
+    start_time = datetime.now()
+    
+    data = []
+    
+    for i in range(num_rows):
+        current_time = start_time + timedelta(minutes=5 * i)
+        
+        # Base healthy values
+        air_temp = round(random.uniform(298.0, 300.0), 1)
+        proc_temp = round(air_temp + random.uniform(10.0, 11.0), 1)
+        rpm = random.randint(1300, 2000)
+        
+        # Tool wear increases by 5 each 5 minutes
+        current_wear = i * 5
+        
+        row = {
+            "Timestamp": current_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "Air temperature K": air_temp,
+            "Process temperature K": proc_temp,
+            "Rotational speed rpm": rpm,
+            "Tool wear min": current_wear,
+            "Machine failure": 0
+        }
+        data.append(row)
+        
+    # Write to CSV
+    headers = ["Timestamp", "Air temperature K", "Process temperature K", "Rotational speed rpm", "Tool wear min", "Machine failure"]
+    with open(file_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        writer.writerows(data)
+        
+    return SimulationResponse(
+        message="Successfully generated healthy CNC data",
+        file_path=file_path,
+        num_rows=num_rows,
+        preview=data[:5]
+    )
+
+
+@router.post("/machine-diagnosis")
+def machine_diagnosis(machine_id: str):
+    SimulationManager.restart_simulation(machine_id)
+    return {"message": f"Simulation restarted for machine {machine_id}"}
