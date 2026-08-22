@@ -8,11 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # --- Database ---
-    POSTGRES_USER: str = "comfest"
-    POSTGRES_PASSWORD: str = "changeme"
-    POSTGRES_DB: str = "comfest_db"
-    DATABASE_URL: str = "postgresql+psycopg://comfest:changeme@postgres:5432/comfest_db"
+    # --- Database (Supabase) ---
+    DATABASE_URL: str = "postgresql+psycopg://postgres.ebqffrevalvtmskfangw:predixiawomai@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres"
 
     # --- ChromaDB ---
     CHROMA_HOST: str = "chromadb"

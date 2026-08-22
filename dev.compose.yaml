@@ -66,8 +66,6 @@ services:
     cap_add:
       - SYS_ADMIN
     depends_on:
-      postgres:
-        condition: service_healthy
       # `alembic upgrade head` (this container's own startup CMD) runs a
       # migration (0003_seed_dataset_sensor_chunks.py) that calls embed_texts()
       # — embedding-service must be actually ready (model loaded, /health

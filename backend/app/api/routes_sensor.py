@@ -323,6 +323,11 @@ class SimulationManager:
         return len(machine_ids)
 
     @classmethod
+    def stop_simulation(cls, machine_id: str):
+        if machine_id in cls._stop_events:
+            cls._stop_events[machine_id].set()
+
+    @classmethod
     def _run_simulation(cls, machine_id: str, stop_event: threading.Event):
         from app.db.session import SessionLocal
         from app.db.models import SensorReading, Machine
@@ -452,7 +457,9 @@ def submit_reading(
         #         "tool_wear_min), which indicates a disconnected/faulty sensor."
         #     ),
         # )
+        
     SimulationManager.start_simulation(machine_id)
+        
     run = assign_run_id(payload, db, machine_id)
     reading = SensorReading(
         run_id=run.id,
@@ -504,6 +511,109 @@ def submit_reading(
     # "+N Minute" probability too — that's only known once the pipeline
     # (which computes it) has run. report stays None if the pipeline failed
     # above; notify_new_reading() just omits the horizon line in that case.
+    notify_new_reading(
+        machine.name,
+        pred_result,
+        horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
+        horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
+        run_label=run.run_label,
+        health_score=report.prediction.health_score if report else None,
+        top_feature_name=report.shap.features[0].feature_name if report and report.shap.features else None,
+        cause_analysis_short=report.cause_analysis_short if report else None,
+    )
+
+    return SensorReadingSubmitResponseOut(
+        reading=SensorReadingOut(
+            id=str(reading.id),
+            run_id=str(reading.run_id) if reading.run_id else None,
+            reading_timestamp=reading.reading_timestamp,
+            air_temperature_k=float(reading.air_temperature_k),
+            process_temperature_k=float(reading.process_temperature_k),
+            rotational_speed_rpm=reading.rotational_speed_rpm,
+            tool_wear_min=float(reading.tool_wear_min),
+            machine_failure=reading.machine_failure,
+            input_source=reading.input_source,
+        ),
+        run=SensorRunOut(
+            id=str(run.id),
+            run_label=run.run_label,
+            start_timestamp=run.start_timestamp,
+            end_timestamp=run.end_timestamp,
+            sample_count=run.sample_count,
+            failure_count=run.failure_count,
+            is_closed=run.is_closed,
+        ),
+    )
+
+
+@router.post("/reading", response_model=SensorReadingSubmitResponseOut)
+def submit_single_reading_and_stop(
+    payload: SensorReadingIn,
+    machine_id: str,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_current_user_optional),
+    _: None = Depends(_require_direct_localhost_request),
+):
+    machine = _require_machine(db, machine_id)
+    if _is_zero_reading(payload):
+        zero_fields = [
+            name
+            for name, value in (
+                ("air_temperature_k", payload.air_temperature_k),
+                ("process_temperature_k", payload.process_temperature_k),
+                ("rotational_speed_rpm", payload.rotational_speed_rpm),
+                ("tool_wear_min", payload.tool_wear_min),
+            )
+            if value == 0
+        ]
+        logger.warning(
+            "submit_single_reading_and_stop: DIAGNOSTIC — zero-value reading let through, "
+            "machine=%s zero_fields=%s payload=%s",
+            machine_id,
+            zero_fields,
+            payload.model_dump(),
+        )
+        
+    SimulationManager.stop_simulation(machine_id)
+        
+    run = assign_run_id(payload, db, machine_id)
+    reading = SensorReading(
+        run_id=run.id,
+        reading_timestamp=payload.timestamp,
+        air_temperature_k=payload.air_temperature_k,
+        process_temperature_k=payload.process_temperature_k,
+        rotational_speed_rpm=payload.rotational_speed_rpm,
+        tool_wear_min=payload.tool_wear_min,
+        machine_failure=None,
+        input_source="manual_form",
+        created_by=user.id if user else None,
+    )
+    db.add(reading)
+    db.commit()
+    db.refresh(reading)
+
+    feature_row = {
+        "air_temperature_k": float(reading.air_temperature_k),
+        "process_temperature_k": float(reading.process_temperature_k),
+        "rotational_speed_rpm": reading.rotational_speed_rpm,
+        "tool_wear_min": float(reading.tool_wear_min),
+    }
+    pred_result = predict_failure(feature_row)
+    reading.machine_failure = pred_result.label
+    db.commit()
+    db.refresh(reading)
+
+    _bump_failure_count_if_needed(db, run, pred_result.label)
+
+    report = None
+    try:
+        report = _run_report_pipeline(db, reading, pred_result, machine_id)
+    except Exception:
+        logger.exception(
+            "submit_single_reading_and_stop: _run_report_pipeline failed for reading %s",
+            reading.id,
+        )
+
     notify_new_reading(
         machine.name,
         pred_result,
