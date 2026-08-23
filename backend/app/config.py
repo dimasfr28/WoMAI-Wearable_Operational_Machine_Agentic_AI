@@ -9,7 +9,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # --- Database (Supabase) ---
-    DATABASE_URL: str = "postgresql+psycopg://postgres.ebqffrevalvtmskfangw:predixiawomai@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres"
+    # Placeholder only — never hardcode a real Supabase credential here (see
+    # .env.example). Non-resolvable on purpose so a misconfigured deploy
+    # fails to connect instead of silently reaching a real database; tests
+    # never hit this (they use tests/sqlite_compat.py), it only exists so
+    # `Settings()` can still be constructed without a `.env` file present.
+    DATABASE_URL: str = "postgresql+psycopg://user:password@localhost:5432/set_DATABASE_URL_in_env"
 
     # --- ChromaDB ---
     CHROMA_HOST: str = "chromadb"
@@ -88,20 +93,23 @@ class Settings(BaseSettings):
     # replayed reading (minutes-to-hours of mismatch) still does.
     RUN_SYNC_TOLERANCE_MINUTES: float = 10.0
     # Hard cap on same-run continuation, independent of the sync-tolerance
-    # check above — a fixed-cadence data source (e.g. SimulationManager,
+    # check above — a fixed-cadence data source (e.g. the mock generator,
     # routes_sensor.py) can keep tool_wear perfectly in sync with elapsed
     # time indefinitely, which would otherwise never trip the sync check and
     # let a single run run forever. TEMPORARY: set low (2 min) for demoing
-    # the simulation feature with a fresh run/report every cycle; revisit
-    # once real ESP32 cadence/tuning is settled.
+    # with a fresh run/report every cycle; revisit once real ESP32
+    # cadence/tuning is settled.
     RUN_MAX_SAME_RUN_GAP_MINUTES: float = 2.0
 
-    # --- Simulation auto-start (SimulationManager, routes_sensor.py) ---
-    # Delay after backend startup before auto-starting demo simulation for
-    # every existing machine — SimulationManager's state is in-memory only,
-    # so a process restart otherwise leaves it dormant until some reading
-    # arrives via submit_reading() to re-trigger it.
-    SIMULATION_AUTOSTART_DELAY_SECONDS: float = 120.0
+    # --- Data source mode (routes_sensor.py) ---
+    # "iot" (default): POST /sensor/readings and /sensor/readings/batch accept
+    # real sensor submissions; POST /sensor/mock/generate is unavailable.
+    # "mock": the reverse — real submissions are rejected (403) and
+    # /sensor/mock/generate becomes available, so mock data never mixes with
+    # real IoT data. Checked once per request (a plain settings read), never
+    # a background/scheduled process — see AIC MVP scope rules on backend
+    # architecture being synchronous-interaction-only.
+    MODE: str = "iot"
 
 
 @lru_cache
