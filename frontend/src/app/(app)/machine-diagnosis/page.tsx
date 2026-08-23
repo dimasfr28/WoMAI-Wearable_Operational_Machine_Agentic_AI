@@ -11,7 +11,6 @@ import {
   Clock,
   Gauge,
   RefreshCw,
-  RotateCcw,
   Sparkles,
   Thermometer,
   Wifi,
@@ -23,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getReportAction } from "@/app/actions/report";
 import { getMachineStatusAction } from "@/app/actions/machine-status";
-import { restartSimulationAction } from "@/app/actions/simulation";
 import { RequireActiveMachine } from "@/components/require-active-machine";
 import { cn } from "@/lib/utils";
 import type { EarlyWarningItem, Machine, MachineStatus, ReportData } from "@/lib/types";
@@ -241,7 +239,6 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
   const [status, setStatus] = useState<MachineStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [restarting, setRestarting] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -273,27 +270,6 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
     load();
   }, [load]);
 
-  const handleRestart = useCallback(async () => {
-    setRestarting(true);
-    try {
-      await restartSimulationAction(machine.id);
-      toast.success(
-        "Simulation restarted. A fresh reading takes about 2 minutes to arrive — refreshing automatically.",
-      );
-      // The simulator's first reading of a new run lands ~120s after restart
-      // (SimulationManager's loop cadence, backend/app/api/routes_sensor.py) —
-      // wait past that before refetching so this doesn't just reload stale data.
-      window.setTimeout(() => {
-        load();
-      }, 130_000);
-    } catch (err) {
-      unstable_rethrow(err);
-      toast.error(err instanceof Error ? err.message : "Failed to restart simulation.");
-    } finally {
-      setRestarting(false);
-    }
-  }, [machine.id, load]);
-
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       <div className="flex items-center justify-between gap-4">
@@ -314,16 +290,6 @@ function MachineDiagnosisContent({ machine }: { machine: Machine }) {
         </div>
         <div className="flex items-center gap-2">
           {status && <DataFreshnessBadge lastReadingAt={status.lastReadingAt} now={now} />}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRestart}
-            disabled={restarting}
-            className="gap-1.5"
-          >
-            <RotateCcw className={cn("size-4", restarting && "animate-spin")} />
-            Restart Simulation
-          </Button>
           <Button variant="outline" size="icon" onClick={load} disabled={loading}>
             <RefreshCw className={cn("size-4", loading && "animate-spin")} />
             <span className="sr-only">Refresh</span>

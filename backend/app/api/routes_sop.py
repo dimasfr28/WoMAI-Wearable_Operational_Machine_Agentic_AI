@@ -20,9 +20,26 @@ from app.schemas.sop import SopCreateIn, SopOut, SopUpdateIn
 router = APIRouter(prefix="/sops", tags=["sops"])
 
 
+def _to_out(sop: Sop) -> SopOut:
+    # SopOut.id is `str`, but Sop.id is a UUID column — pydantic v2 doesn't
+    # coerce UUID -> str automatically, so from_attributes on the raw ORM
+    # object raises ResponseValidationError. Convert explicitly instead.
+    return SopOut(
+        id=str(sop.id),
+        title=sop.title,
+        symptoms=sop.symptoms,
+        body=sop.body,
+        steps=sop.steps,
+        reference=sop.reference,
+        created_at=sop.created_at,
+        updated_at=sop.updated_at,
+    )
+
+
 @router.get("", response_model=list[SopOut])
 def list_sops(db: Session = Depends(get_db)):
-    return db.query(Sop).order_by(Sop.created_at.asc()).all()
+    sops = db.query(Sop).order_by(Sop.created_at.asc()).all()
+    return [_to_out(s) for s in sops]
 
 
 @router.post("", response_model=SopOut, status_code=201)
@@ -42,7 +59,7 @@ def create_sop(
     db.add(sop)
     db.commit()
     db.refresh(sop)
-    return sop
+    return _to_out(sop)
 
 
 @router.patch("/{sop_id}", response_model=SopOut)
@@ -67,7 +84,7 @@ def update_sop(
         sop.reference = payload.reference
     db.commit()
     db.refresh(sop)
-    return sop
+    return _to_out(sop)
 
 
 @router.delete("/{sop_id}", status_code=204)
