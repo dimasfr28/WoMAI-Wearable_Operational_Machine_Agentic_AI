@@ -8,11 +8,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # --- Database ---
-    POSTGRES_USER: str = "comfest"
-    POSTGRES_PASSWORD: str = "changeme"
-    POSTGRES_DB: str = "comfest_db"
-    DATABASE_URL: str = "postgresql+psycopg://comfest:changeme@postgres:5432/comfest_db"
+    # --- Database (Supabase) ---
+    # Placeholder only — never hardcode a real Supabase credential here (see
+    # .env.example). Non-resolvable on purpose so a misconfigured deploy
+    # fails to connect instead of silently reaching a real database; tests
+    # never hit this (they use tests/sqlite_compat.py), it only exists so
+    # `Settings()` can still be constructed without a `.env` file present.
+    DATABASE_URL: str = "postgresql+psycopg://user:password@localhost:5432/set_DATABASE_URL_in_env"
 
     # --- ChromaDB ---
     CHROMA_HOST: str = "chromadb"
@@ -90,6 +92,24 @@ class Settings(BaseSettings):
     # jitter/batching never false-splits a run, while a genuinely stale or
     # replayed reading (minutes-to-hours of mismatch) still does.
     RUN_SYNC_TOLERANCE_MINUTES: float = 10.0
+    # Hard cap on same-run continuation, independent of the sync-tolerance
+    # check above — a fixed-cadence data source (e.g. the mock generator,
+    # routes_sensor.py) can keep tool_wear perfectly in sync with elapsed
+    # time indefinitely, which would otherwise never trip the sync check and
+    # let a single run run forever. TEMPORARY: set low (2 min) for demoing
+    # with a fresh run/report every cycle; revisit once real ESP32
+    # cadence/tuning is settled.
+    RUN_MAX_SAME_RUN_GAP_MINUTES: float = 2.0
+
+    # --- Data source mode (routes_sensor.py) ---
+    # "iot" (default): POST /sensor/readings and /sensor/readings/batch accept
+    # real sensor submissions; POST /sensor/mock/generate is unavailable.
+    # "mock": the reverse — real submissions are rejected (403) and
+    # /sensor/mock/generate becomes available, so mock data never mixes with
+    # real IoT data. Checked once per request (a plain settings read), never
+    # a background/scheduled process — see AIC MVP scope rules on backend
+    # architecture being synchronous-interaction-only.
+    MODE: str = "iot"
 
 
 @lru_cache

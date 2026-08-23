@@ -37,15 +37,18 @@ services:
     volumes:
       - backend_saved:/app/saved
       - pdf_library:/data/pdf_library
-      - machine_reports:/app/reports
+      # Was mounted at /app/reports, stale from before REPORTS_DIR
+      # (app/config.py) moved to /data/reports — the volume sat unused at
+      # the old path while every actual write to /data/reports landed on
+      # the container's ephemeral layer, wiped on every recreate while
+      # MachineReport DB rows (Supabase) kept pointing at the missing files.
+      - machine_reports:/data/reports
     # Alibaba part-price scraping runs Chromium via Playwright IN-PROCESS
     # (backend/app/rag/part_price_search.py) — SYS_ADMIN capability needed for
     # Chromium's sandbox to work inside a container without --no-sandbox.
     cap_add:
       - SYS_ADMIN
     depends_on:
-      postgres:
-        condition: service_healthy
       mineru-service:
         condition: service_healthy
       embedding-service:

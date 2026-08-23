@@ -50,7 +50,15 @@ def retrieve_documents(
     if include_sensor_runs:
         sensor_collection = get_sensor_collection()
         if sensor_collection.count() > 0:
-            res = query(sensor_collection, embedding, n_results=min(k, 3), where=where)
+            sensor_where = {"$or": [{"machine_id": machine_id}, {"doc": "dataset"}]} if machine_id else None
+            try:
+                res = query(sensor_collection, embedding, n_results=min(k, 3), where=sensor_where)
+            except Exception as e:
+                # Fallback if $or with missing field throws an error in older chromadb versions
+                import logging
+                logging.getLogger(__name__).warning("Chroma $or query failed, falling back to machine_id only: %s", e)
+                res = query(sensor_collection, embedding, n_results=min(k, 3), where=where)
+            
             docs = res.get("documents", [[]])[0]
             metas = res.get("metadatas", [[]])[0]
             ids = res.get("ids", [[]])[0]

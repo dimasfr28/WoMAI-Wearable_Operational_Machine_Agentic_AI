@@ -34,8 +34,8 @@ export function middleware(request: NextRequest): NextResponse {
     // user WAJIB mendarat di /mesin dulu — mesin aktif tersimpan di
     // localStorage (client-only), jadi middleware ini tidak bisa tahu
     // apakah user "sudah pernah pilih mesin"; /mesin sendiri yang
-    // menentukan langkah berikutnya (pilih mesin -> redirect ke
-    // /machine-diagnosis, lihat app/(app)/mesin/page.tsx).
+    // menentukan langkah berikutnya (pilih mesin -> redirect ke /chat,
+    // lihat app/(app)/mesin/page.tsx).
     const url = request.nextUrl.clone();
     url.pathname = "/mesin";
     url.search = "";

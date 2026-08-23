@@ -7,9 +7,11 @@ kept as its own module for clarity rather than overloading routes_report.py.
 from __future__ import annotations
 
 import logging
+import random
 import statistics
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from fastapi import HTTPException
@@ -62,6 +64,55 @@ def _is_zero_reading(reading: SensorReadingIn) -> bool:
         or reading.rotational_speed_rpm == 0
         or reading.tool_wear_min == 0
     )
+
+
+# Headers Cloudflare (and cloudflared, for Tunnel) injects into every request
+# it proxies — present only on requests that went through Cloudflare's edge,
+# never on a request hitting this server directly (e.g. curl/Swagger UI
+# against localhost:8002). Peer IP alone can't distinguish these inside
+# Docker: both a genuine localhost request and a tunnel-forwarded one arrive
+# via the same bridge-gateway address from this container's point of view.
+_TUNNEL_HEADERS = ("cf-connecting-ip", "cf-ray", "cf-visitor")
+
+
+def _require_direct_localhost_request(request: Request) -> None:
+    """Rejects any request proxied through Cloudflare Tunnel — this endpoint
+    is meant to accept data only from a direct local caller (Swagger UI at
+    /docs, curl, etc. against localhost:8002)."""
+    if any(h in request.headers for h in _TUNNEL_HEADERS):
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint only accepts direct localhost requests, not requests proxied through a tunnel.",
+        )
+
+
+def _require_iot_mode() -> None:
+    """Real sensor submissions and mock data must never mix — gated by a
+    single settings.MODE read per request (plain synchronous check, not a
+    background process), see MODE in app/config.py. Rejects real submissions
+    while MODE=mock."""
+    if settings.MODE != "iot":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Real sensor submissions are disabled while MODE={settings.MODE!r} "
+                "— set MODE=iot (and restart the backend) to accept them again."
+            ),
+        )
+
+
+def _require_mock_mode() -> None:
+    """Counterpart to _require_iot_mode — POST /sensor/mock/generate is only
+    reachable while MODE=mock, so accidentally leaving MODE=iot in
+    production can never let synthetic data in."""
+    if settings.MODE != "mock":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Mock data generation is disabled while MODE={settings.MODE!r} "
+                "— set MODE=mock (and restart the backend) to use it."
+            ),
+        )
 
 
 def _open_new_run(db: Session, machine_id: str, reading: SensorReadingIn) -> SensorRun:
@@ -188,7 +239,14 @@ def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) ->
     operation, so a reading whose wear/time relationship is wildly out of
     sync (e.g. a large real-world gap, or replayed/duplicate data) starts a
     new run even though wear itself didn't decrease. A wear decrease still
-    always forces a new run on its own, unchanged from before."""
+    always forces a new run on its own, unchanged from before.
+
+    AND the elapsed time itself must be within
+    settings.RUN_MAX_SAME_RUN_GAP_MINUTES — a hard cap independent of the
+    sync check above, since a fixed-cadence source (e.g. the mock generator)
+    can keep wear perfectly in sync with elapsed time forever, which would
+    never trip the sync-tolerance check on its own and let one run grow
+    without bound."""
     open_run = (
         db.query(SensorRun)
         .filter_by(is_closed=False, machine_id=machine_id)
@@ -217,6 +275,7 @@ def assign_run_id(new_reading: SensorReadingIn, db: Session, machine_id: str) ->
     same_run = (
         wear_delta >= 0
         and abs(timestamp_delta_minutes - wear_delta) <= settings.RUN_SYNC_TOLERANCE_MINUTES
+        and timestamp_delta_minutes <= settings.RUN_MAX_SAME_RUN_GAP_MINUTES
     )
 
     if same_run:
@@ -247,128 +306,108 @@ def _bump_failure_count_if_needed(db: Session, run: SensorRun, predicted_label: 
 
 
 
-import threading
-import time
-from datetime import datetime, timedelta
-import random
+@router.post("/mock/generate")
+def generate_mock_readings(
+    machine_id: str,
+    count: int = 10,
+    interval_minutes: float = 2.0,
+    db: Session = Depends(get_db),
+    _mode: None = Depends(_require_mock_mode),
+    _localhost: None = Depends(_require_direct_localhost_request),
+):
+    """Synchronous mock-data generator — the ONLY way to create simulated
+    demo data (see MODE in app/config.py). Generates `count` readings inside
+    this single request-response cycle, running the same
+    assign_run_id/predict_failure/report pipeline a real submission would,
+    then returns — no background thread, no scheduled/recurring process
+    (AIC MVP scope rule: backend architecture stays synchronous-interaction-
+    only). Only reachable while MODE=mock; POST /sensor/readings and
+    /sensor/readings/batch reject real submissions in that mode (see
+    _require_iot_mode) so mock and real data never mix."""
+    if count < 1:
+        raise HTTPException(status_code=400, detail="count must be at least 1")
+    machine = _require_machine(db, machine_id)
 
-class SimulationManager:
-    _tasks = {}
-    _state = {}
-    _stop_events = {}
+    latest = (
+        db.query(SensorReading)
+        .join(SensorRun, SensorRun.id == SensorReading.run_id)
+        .filter(SensorRun.machine_id == machine_id)
+        .order_by(SensorReading.reading_timestamp.desc())
+        .first()
+    )
+    tool_wear = float(latest.tool_wear_min) if latest else 0.0
 
-    @classmethod
-    def start_simulation(cls, machine_id: str):
-        if machine_id in cls._tasks and cls._tasks[machine_id].is_alive():
-            return
-        cls._state[machine_id] = {"tool_wear": 0.0}
-        stop_event = threading.Event()
-        cls._stop_events[machine_id] = stop_event
-        t = threading.Thread(target=cls._run_simulation, args=(machine_id, stop_event), daemon=True)
-        cls._tasks[machine_id] = t
-        t.start()
+    now = datetime.now(timezone.utc)
+    last_reading = None
+    last_pred_result = None
+    last_run = None
+    for i in range(count):
+        timestamp = now - timedelta(minutes=interval_minutes * (count - 1 - i))
+        air_temp = round(random.uniform(298.0, 300.0), 1)
+        proc_temp = round(air_temp + random.uniform(10.0, 11.0), 1)
+        rpm = random.randint(1300, 2000)
+        tool_wear = round(tool_wear + interval_minutes, 2)
 
-    @classmethod
-    def restart_simulation(cls, machine_id: str):
-        if machine_id in cls._stop_events:
-            cls._stop_events[machine_id].set()
-        cls._state[machine_id] = {"tool_wear": 0.0}
-        stop_event = threading.Event()
-        cls._stop_events[machine_id] = stop_event
-        t = threading.Thread(target=cls._run_simulation, args=(machine_id, stop_event), daemon=True)
-        cls._tasks[machine_id] = t
-        t.start()
+        item = SensorReadingIn(
+            timestamp=timestamp,
+            air_temperature_k=air_temp,
+            process_temperature_k=proc_temp,
+            rotational_speed_rpm=rpm,
+            tool_wear_min=tool_wear,
+        )
+        run = assign_run_id(item, db, machine_id)
+        reading = SensorReading(
+            run_id=run.id,
+            reading_timestamp=item.timestamp,
+            air_temperature_k=item.air_temperature_k,
+            process_temperature_k=item.process_temperature_k,
+            rotational_speed_rpm=item.rotational_speed_rpm,
+            tool_wear_min=item.tool_wear_min,
+            machine_failure=None,
+            input_source="simulation",
+        )
+        db.add(reading)
+        db.commit()
+        db.refresh(reading)
 
-    @classmethod
-    def _run_simulation(cls, machine_id: str, stop_event: threading.Event):
-        from app.db.session import SessionLocal
-        from app.db.models import SensorReading, Machine
-        from app.ml.predictor_clasification import predict_failure
-        from app.schemas.sensor import SensorReadingIn
-        try:
-            while not stop_event.is_set():
-                # Wait 2 minutes (120 seconds), but check stop_event every second so it can be interrupted quickly
-                for _ in range(120):
-                    if stop_event.is_set():
-                        return
-                    time.sleep(1)
-                    
-                db = SessionLocal()
-                try:
-                    machine = db.query(Machine).filter(Machine.id == machine_id).first()
-                    if not machine:
-                        break
+        feature_row = {
+            "air_temperature_k": float(reading.air_temperature_k),
+            "process_temperature_k": float(reading.process_temperature_k),
+            "rotational_speed_rpm": reading.rotational_speed_rpm,
+            "tool_wear_min": float(reading.tool_wear_min),
+        }
+        pred_result = predict_failure(feature_row)
+        reading.machine_failure = pred_result.label
+        db.commit()
+        db.refresh(reading)
+        _bump_failure_count_if_needed(db, run, pred_result.label)
 
-                    from datetime import timezone
-                    now = datetime.now(timezone.utc)
-                    
-                    air_temp = round(random.uniform(298.0, 300.0), 1)
-                    proc_temp = round(air_temp + random.uniform(10.0, 11.0), 1)
-                    rpm = random.randint(1300, 2000)
-                    
-                    # Tool wear increases by 2.0 every 2 minutes
-                    cls._state[machine_id]["tool_wear"] += 2.0
-                    
-                    item = SensorReadingIn(
-                        timestamp=now,
-                        air_temperature_k=air_temp,
-                        process_temperature_k=proc_temp,
-                        rotational_speed_rpm=rpm,
-                        tool_wear_min=round(cls._state[machine_id]["tool_wear"], 2)
-                    )
-                    
-                    run = assign_run_id(item, db, machine_id)
-                    reading = SensorReading(
-                        run_id=run.id,
-                        reading_timestamp=item.timestamp,
-                        air_temperature_k=item.air_temperature_k,
-                        process_temperature_k=item.process_temperature_k,
-                        rotational_speed_rpm=item.rotational_speed_rpm,
-                        tool_wear_min=item.tool_wear_min,
-                        machine_failure=None,
-                        input_source="simulation",
-                    )
-                    db.add(reading)
-                    db.commit()
-                    db.refresh(reading)
-                    
-                    feature_row = {
-                        "air_temperature_k": float(reading.air_temperature_k),
-                        "process_temperature_k": float(reading.process_temperature_k),
-                        "rotational_speed_rpm": reading.rotational_speed_rpm,
-                        "tool_wear_min": float(reading.tool_wear_min),
-                    }
-                    pred_result = predict_failure(feature_row)
-                    reading.machine_failure = pred_result.label
-                    db.commit()
-                    db.refresh(reading)
-                    
-                    _bump_failure_count_if_needed(db, run, pred_result.label)
-                    
-                    # Because there is only 1 row, we always trigger the report pipeline
-                    report = None
-                    try:
-                        report = _run_report_pipeline(db, reading, pred_result, machine_id)
-                    except Exception as e:
-                        logger.error(f"Simulation pipeline error: {e}")
-                    
-                    notify_new_reading(
-                                machine.name,
-                                pred_result,
-                                horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
-                                horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
-                                run_label=run.run_label,
-                                health_score=report.prediction.health_score if report else None,
-                                top_feature_name=report.shap.features[0].feature_name if report and report.shap.features else None,
-                                cause_analysis_short=report.cause_analysis_short if report else None,
-                            )
-                except Exception as e:
-                    logger.error(f"Error in simulation task: {e}")
-                finally:
-                    db.close()
-        except Exception as e:
-            logger.error(f"Simulation thread crashed: {e}")
+        last_reading, last_pred_result, last_run = reading, pred_result, run
 
+    # Report pipeline (SHAP/CRAG/PDF) + notification only once, for the last
+    # reading — keeps a large `count` fast instead of running the full
+    # pipeline N times.
+    report = None
+    try:
+        report = _run_report_pipeline(db, last_reading, last_pred_result, machine_id)
+    except Exception:
+        logger.exception(
+            "generate_mock_readings: _run_report_pipeline failed for reading %s",
+            last_reading.id,
+        )
+
+    notify_new_reading(
+        machine.name,
+        last_pred_result,
+        horizon_probability=report.horizon_prediction.failure_probability if report and report.horizon_prediction else None,
+        horizon_minutes=report.horizon_prediction.horizon_minutes if report and report.horizon_prediction else None,
+        run_label=last_run.run_label,
+        health_score=report.prediction.health_score if report else None,
+        top_feature_name=report.shap.features[0].feature_name if report and report.shap.features else None,
+        cause_analysis_short=report.cause_analysis_short if report else None,
+    )
+
+    return {"generated": count, "machine_id": machine_id, "last_reading_id": str(last_reading.id)}
 
 
 @router.post("/readings", response_model=SensorReadingSubmitResponseOut)
@@ -377,18 +416,40 @@ def submit_reading(
     machine_id: str,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_current_user_optional),
+    _: None = Depends(_require_direct_localhost_request),
 ):
     machine = _require_machine(db, machine_id)
+    _require_iot_mode()
     if _is_zero_reading(payload):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Invalid sensor reading: one or more values is 0 "
-                "(air_temperature_k, process_temperature_k, rotational_speed_rpm, "
-                "tool_wear_min), which indicates a disconnected/faulty sensor."
-            ),
+        # TEMPORARY DIAGNOSTIC — 400 rejection disabled to see which field is
+        # actually 0 on incoming readings; re-enable the raise below once
+        # confirmed. Logs the zero field(s) instead of blocking the request.
+        zero_fields = [
+            name
+            for name, value in (
+                ("air_temperature_k", payload.air_temperature_k),
+                ("process_temperature_k", payload.process_temperature_k),
+                ("rotational_speed_rpm", payload.rotational_speed_rpm),
+                ("tool_wear_min", payload.tool_wear_min),
+            )
+            if value == 0
+        ]
+        logger.warning(
+            "submit_reading: DIAGNOSTIC — zero-value reading let through, "
+            "machine=%s zero_fields=%s payload=%s",
+            machine_id,
+            zero_fields,
+            payload.model_dump(),
         )
-    SimulationManager.start_simulation(machine_id)
+        # raise HTTPException(
+        #     status_code=400,
+        #     detail=(
+        #         "Invalid sensor reading: one or more values is 0 "
+        #         "(air_temperature_k, process_temperature_k, rotational_speed_rpm, "
+        #         "tool_wear_min), which indicates a disconnected/faulty sensor."
+        #     ),
+        # )
+
     run = assign_run_id(payload, db, machine_id)
     reading = SensorReading(
         run_id=run.id,
@@ -480,10 +541,12 @@ def submit_readings_batch(
     payload: SensorReadingBatchIn,
     machine_id: str,
     db: Session = Depends(get_db),
+    _: None = Depends(_require_direct_localhost_request),
 ):
     """Endpoint API untuk DAG (input otomatis, bulk) — Section 7. Belum dipakai
     DAG saat ini, disiapkan supaya integrasi Airflow/Prefect nanti tinggal panggil."""
     machine = _require_machine(db, machine_id)
+    _require_iot_mode()
     out = []
     for item in payload.readings:
         if _is_zero_reading(item):
@@ -681,75 +744,3 @@ def get_readings_history(machine_id: str, db: Session = Depends(get_db)):
         rotational_speed_rpm=_param_stats(rpm_vals),
         tool_wear_min=_param_stats(wear_vals),
     )
-
-
-# --- Added for Simulation ---
-import csv
-import os
-import random
-from datetime import datetime, timedelta
-from fastapi import Query
-from pydantic import BaseModel
-
-class SimulationResponse(BaseModel):
-    message: str
-    file_path: str
-    num_rows: int
-    preview: list[dict]
-
-@router.post("/simulate-csv", response_model=SimulationResponse)
-def simulate_cnc_data(num_rows: int = Query(100, description="Number of rows to generate")):
-    """
-    Generates healthy CNC milling machine data into a CSV file.
-    Each row represents a 5-minute interval.
-    """
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    saved_dir = os.path.join(base_dir, "saved")
-    os.makedirs(saved_dir, exist_ok=True)
-    
-    file_path = os.path.join(saved_dir, "healthy_cnc_data.csv")
-    
-    start_time = datetime.now()
-    
-    data = []
-    
-    for i in range(num_rows):
-        current_time = start_time + timedelta(minutes=5 * i)
-        
-        # Base healthy values
-        air_temp = round(random.uniform(298.0, 300.0), 1)
-        proc_temp = round(air_temp + random.uniform(10.0, 11.0), 1)
-        rpm = random.randint(1300, 2000)
-        
-        # Tool wear increases by 5 each 5 minutes
-        current_wear = i * 5
-        
-        row = {
-            "Timestamp": current_time.strftime("%Y-%m-%d %H:%M:%S"),
-            "Air temperature K": air_temp,
-            "Process temperature K": proc_temp,
-            "Rotational speed rpm": rpm,
-            "Tool wear min": current_wear,
-            "Machine failure": 0
-        }
-        data.append(row)
-        
-    # Write to CSV
-    headers = ["Timestamp", "Air temperature K", "Process temperature K", "Rotational speed rpm", "Tool wear min", "Machine failure"]
-    with open(file_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=headers)
-        writer.writeheader()
-        writer.writerows(data)
-        
-    return SimulationResponse(
-        message="Successfully generated healthy CNC data",
-        file_path=file_path,
-        num_rows=num_rows,
-        preview=data[:5]
-    )
-
-
-@router.post("/machine-diagnosis")
-def machine_diagnosis(machine_id: str):
-    SimulationManager.restart_simulation(machine_id)
-    return {"message": f"Simulation restarted for machine {machine_id}"}

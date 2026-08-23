@@ -18,13 +18,24 @@ import base64
 import re
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
 from app.ml.predictor_clasification import PARAM_META
+
+# Machine Report timestamps are shown in WIB (UTC+7), not UTC — this system
+# is used by an Indonesian operator/engineer audience.
+WIB = timezone(timedelta(hours=7))
+
+
+def format_wib(dt: datetime, fmt: str) -> str:
+    """Formats a tz-aware datetime (any timezone, normally UTC — every
+    timestamp stored in this DB is) in WIB."""
+    return dt.astimezone(WIB).strftime(fmt)
+
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _env = Environment(
@@ -247,7 +258,7 @@ def render_machine_report_pdf(
         machine_id=machine_id,
         machine_name=machine_name,
         report_number=report_number,
-        report_datetime=datetime.now(timezone.utc).strftime("%d %B %Y, %H:%M UTC"),
+        report_datetime=format_wib(datetime.now(timezone.utc), "%d %B %Y, %H:%M WIB"),
         logo_data_uri=_logo_data_uri(),
         operating_status=operating_status,
         sensor=report_out.sensor,

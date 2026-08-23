@@ -53,14 +53,19 @@ services:
       # 0003) is intentionally NOT mounted here — PDF_LIBRARY_DIR points at the
       # library root, and dataset.csv seeding stays a separate concern.
       - /home/dimas/comfest/document:/data/pdf_library
+      # Generated Machine Report PDFs (REPORTS_DIR, app/config.py) — a named
+      # volume rather than a bind-mount since there's no fixed host path for
+      # this in dev, only that it must survive `backend` being recreated
+      # (was previously unmounted entirely: every container recreate wiped
+      # all reports on disk while their MachineReport DB rows, in Supabase,
+      # kept pointing at the now-missing files, 404ing on every PDF fetch).
+      - machine_reports:/data/reports
     # Alibaba part-price scraping runs Chromium via Playwright IN-PROCESS
     # (backend/app/rag/part_price_search.py) — SYS_ADMIN capability needed for
     # Chromium's sandbox to work inside a container without --no-sandbox.
     cap_add:
       - SYS_ADMIN
     depends_on:
-      postgres:
-        condition: service_healthy
       # `alembic upgrade head` (this container's own startup CMD) runs a
       # migration (0003_seed_dataset_sensor_chunks.py) that calls embed_texts()
       # — embedding-service must be actually ready (model loaded, /health
@@ -94,3 +99,4 @@ services:
 volumes:
   mineru_cache:
   embedding_cache:
+  machine_reports:
