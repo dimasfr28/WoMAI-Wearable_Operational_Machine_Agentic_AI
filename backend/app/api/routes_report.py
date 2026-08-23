@@ -42,7 +42,7 @@ from app.rag.final_report import (
 from app.rag.part_price_search import search_part_price
 from app.reports import report_folder
 from app.reports.report_narrative import generate_machine_report_narrative
-from app.reports.report_pdf import ConditionLogRow, render_machine_report_pdf
+from app.reports.report_pdf import ConditionLogRow, format_wib, render_machine_report_pdf
 from app.schemas.report import (
     HorizonPredictionOut,
     PartPriceOut,
@@ -146,7 +146,7 @@ def _generate_machine_report_pdf(
     )
     condition_log = [
         ConditionLogRow(
-            timestamp=reading.reading_timestamp.strftime("%d-%m-%Y %H:%M"),
+            timestamp=format_wib(reading.reading_timestamp, "%d-%m-%Y %H:%M WIB"),
             air_temperature_k=float(reading.air_temperature_k),
             process_temperature_k=float(reading.process_temperature_k),
             rotational_speed_rpm=int(reading.rotational_speed_rpm),

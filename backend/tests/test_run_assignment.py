@@ -1,4 +1,5 @@
-"""Unit tests for assign_run_id's timestamp+tool-wear-sync run-clustering rule."""
+"""Unit tests for assign_run_id's timestamp+tool-wear-sync run-clustering
+rule, plus the hard max-same-run-gap cap."""
 from __future__ import annotations
 
 import unittest
@@ -78,7 +79,7 @@ class AssignRunIdTestCase(unittest.TestCase):
     def test_wear_increase_in_sync_with_elapsed_time_stays_same_run(self):
         first_run = self._seed_first_reading(20.0, self.t0)
         second = assign_run_id(
-            _reading(25.0, self.t0 + timedelta(minutes=5)), self.db, str(self.machine.id)
+            _reading(21.5, self.t0 + timedelta(minutes=1.5)), self.db, str(self.machine.id)
         )
         self.assertEqual(second.id, first_run.id)
 
@@ -89,21 +90,43 @@ class AssignRunIdTestCase(unittest.TestCase):
         )
         self.assertNotEqual(second.id, first_run.id)
 
-    def test_wear_non_decreasing_but_timestamp_mismatch_beyond_tolerance_starts_new_run(self):
+    def test_wear_mismatch_beyond_tolerance_starts_new_run(self):
         first_run = self._seed_first_reading(20.0, self.t0)
-        # wear delta 5, timestamp delta 3 hours (180 min) -> mismatch 175min >> tolerance
+        # gap 1 min (well under the 2-min cap), wear delta 11.1 -> mismatch
+        # 10.1min > RUN_SYNC_TOLERANCE_MINUTES (10) -> new run, isolating the
+        # sync-tolerance rule from the separate max-same-run-gap cap below.
         second = assign_run_id(
-            _reading(25.0, self.t0 + timedelta(hours=3)), self.db, str(self.machine.id)
+            _reading(31.1, self.t0 + timedelta(minutes=1)), self.db, str(self.machine.id)
         )
         self.assertNotEqual(second.id, first_run.id)
 
     def test_mismatch_exactly_at_tolerance_boundary_stays_same_run(self):
         first_run = self._seed_first_reading(20.0, self.t0)
-        boundary_minutes = 5 + settings.RUN_SYNC_TOLERANCE_MINUTES  # wear delta 5 + tolerance
+        # gap 1 min, wear delta 11 -> mismatch exactly 10min == tolerance (<=, inclusive)
         second = assign_run_id(
-            _reading(25.0, self.t0 + timedelta(minutes=boundary_minutes)), self.db, str(self.machine.id)
+            _reading(31.0, self.t0 + timedelta(minutes=1)), self.db, str(self.machine.id)
         )
         self.assertEqual(second.id, first_run.id)
+
+    def test_gap_at_max_same_run_cap_with_perfect_sync_stays_same_run(self):
+        first_run = self._seed_first_reading(20.0, self.t0)
+        gap = settings.RUN_MAX_SAME_RUN_GAP_MINUTES
+        second = assign_run_id(
+            _reading(20.0 + gap, self.t0 + timedelta(minutes=gap)), self.db, str(self.machine.id)
+        )
+        self.assertEqual(second.id, first_run.id)
+
+    def test_gap_beyond_max_same_run_cap_starts_new_run_even_with_perfect_sync(self):
+        first_run = self._seed_first_reading(20.0, self.t0)
+        # wear tracks elapsed time exactly 1:1 (mismatch = 0, well within
+        # RUN_SYNC_TOLERANCE_MINUTES) but the gap itself exceeds the hard cap
+        # — this is the scenario a fixed-cadence simulator hits, where wear
+        # is engineered to always stay in sync with time.
+        gap = settings.RUN_MAX_SAME_RUN_GAP_MINUTES + 0.1
+        second = assign_run_id(
+            _reading(20.0 + gap, self.t0 + timedelta(minutes=gap)), self.db, str(self.machine.id)
+        )
+        self.assertNotEqual(second.id, first_run.id)
 
 
 if __name__ == "__main__":
