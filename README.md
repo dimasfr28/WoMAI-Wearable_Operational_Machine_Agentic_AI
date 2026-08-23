@@ -212,6 +212,7 @@ Lihat `.env.example` untuk daftar lengkap. Ringkasannya (dibaca oleh `backend/ap
 | `JWT_EXPIRE_MINUTES`, `JWT_ALGORITHM` | Konfigurasi token autentikasi (`JWT_SECRET` di `.env` **diabaikan** — lihat catatan di atas) |
 | `BACKEND_DOMAIN`, `FRONTEND_DOMAIN` | Hanya dipakai di production (routing Traefik/Dokploy), tidak dipakai di dev |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Opsional — kirim notifikasi Telegram tiap ada pembacaan sensor baru & terprediksi. Kosongkan salah satu/keduanya untuk menonaktifkan. Setup: buat bot via @BotFather di Telegram, lalu ambil `chat_id` dari `https://api.telegram.org/bot<TOKEN>/getUpdates` setelah mengirim pesan apa pun ke bot tersebut. |
+| `MODE` | `iot` (default) atau `mock` — lihat [Sensor](#sensor-sensor) di atas. Butuh restart backend untuk berubah |
 
 > Variabel `SUPABASE_*` yang mungkin masih ada di `.env` peninggalan eksperimen awal proyek dan **tidak dibaca** oleh kode saat ini — aman dihapus.
 
@@ -254,10 +255,23 @@ Setiap mesin memiliki data sensor, dokumen, dan laporan sendiri — hampir semua
 
 | Method | Path | Auth | Deskripsi |
 |---|---|---|---|
-| POST | `/sensor/readings?machine_id=` | - | Kirim satu pembacaan sensor. Memicu seluruh pipeline (prediksi ML + SHAP + KNN + CRAG + harga part + laporan PDF) secara sinkron |
-| POST | `/sensor/readings/batch?machine_id=` | - | Kirim banyak reading sekaligus (disiapkan untuk integrasi input otomatis seperti ESP32/DAG di masa depan) |
+| POST | `/sensor/readings?machine_id=` | - | Kirim satu pembacaan sensor. Memicu seluruh pipeline (prediksi ML + SHAP + KNN + CRAG + harga part + laporan PDF) secara sinkron. Ditolak (403) kalau `MODE=mock` |
+| POST | `/sensor/readings/batch?machine_id=` | - | Kirim banyak reading sekaligus (disiapkan untuk integrasi input otomatis seperti ESP32/DAG di masa depan). Ditolak (403) kalau `MODE=mock` |
+| POST | `/sensor/mock/generate?machine_id=&count=&interval_minutes=` | - | Generate `count` pembacaan mock sekaligus (default 10, jarak `interval_minutes` antar reading, default 2.0) — **sinkron**, selesai dalam satu request. Hanya tersedia kalau `MODE=mock`, ditolak (403) kalau `MODE=iot` |
 | GET | `/sensor/runs?machine_id=` | - | Daftar seluruh "run" mesin |
 | GET | `/sensor/readings/history?machine_id=` | - | Time-series parameter sensor untuk run terbaru + statistik + flag anomali (IQR per-run) |
+
+> **Mock data (`MODE`).** Jalur data utama aplikasi ini **murni IoT**, dan seluruhnya sinkron — sesuai batasan MVP AIC (backend wajib hanya sampai pemrosesan interaksi sinkron, tidak boleh ada background job/pipeline pencatatan data otomatis). Mode data diatur lewat env var `MODE` (`.env`, dibaca oleh `Settings`, butuh restart backend untuk berubah):
+> - **`MODE=iot`** (default) — `/sensor/readings`/`/sensor/readings/batch` menerima submission sungguhan seperti biasa; `/sensor/mock/generate` tidak tersedia (403).
+> - **`MODE=mock`** — kebalikannya: `/sensor/readings`/`/sensor/readings/batch` **ditolak (403)**, dan `/sensor/mock/generate` jadi bisa dipanggil. Ini mencegah data mock dan data sensor sungguhan tercampur.
+>
+> Untuk generate data demo: set `MODE=mock`, restart backend, lalu:
+> ```bash
+> docker compose exec backend python scripts/generate_mock_data.py <machine_id> --count 10 --interval-minutes 2
+> ```
+> `machine_id` didapat dari halaman `/mesin` di frontend, atau `GET /machines` (lihat [Machines](#machines-machines) di atas — butuh login). Setiap panggilan generate `count` reading acak realistis (rentang nilai sama seperti dataset AI4I 2020: suhu udara 298–300K, suhu proses = suhu udara + 10–11K, RPM 1300–2000, tool wear naik `interval_minutes` per reading), jalankan prediksi ML untuk masing-masing (`input_source="simulation"`), lalu selesai dan return — tidak ada apapun yang tetap berjalan setelah response diterima.
+>
+> **Proteksi tunnel.** `/sensor/readings`, `/sensor/readings/batch`, dan `/sensor/mock/generate` hanya menerima request langsung ke `localhost:8002` (Swagger UI, curl, atau script di atas) — request yang lewat Cloudflare Tunnel (dikenali dari header `Cf-Connecting-Ip`/`Cf-Ray`/`Cf-Visitor` yang disisipkan Cloudflare) otomatis ditolak (403).
 
 ### Knowledgebase (`/knowledgebase`)
 
