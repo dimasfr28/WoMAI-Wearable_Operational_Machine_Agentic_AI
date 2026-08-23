@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.api.routes_report import regenerate_machine_report_pdf
 from app.db.models import MachineReport
 from app.db.session import get_db
 from app.reports import report_folder
@@ -58,13 +59,22 @@ def get_latest_machine_report(machine_id: str, db: Session = Depends(get_db)):
     return _to_out(report)
 
 
-def _serve_pdf(report: MachineReport) -> FileResponse:
+def _serve_pdf(report: MachineReport, db: Session) -> FileResponse:
     pdf_path = report_folder.resolve(report.file_path)
     if not pdf_path.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=f"PDF file for report {report.report_number} was not found on disk.",
-        )
+        # File missing but the DB row (and the prediction/reading/final_report
+        # it points at) may still be intact — this happens when REPORTS_DIR's
+        # volume gets cleared independently of the DB (see commit 67e8eee).
+        # Try to rebuild the PDF from already-persisted data before giving up.
+        regenerated = regenerate_machine_report_pdf(db, report)
+        if not regenerated or not pdf_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"PDF file for report {report.report_number} was not found on disk "
+                    "and could not be regenerated (source data is also missing)."
+                ),
+            )
     # `filename=` alone makes FileResponse default to
     # `Content-Disposition: attachment` (forces a download) — this endpoint
     # backs an in-page PDF viewer (frontend's Machine Report page), so it
@@ -91,7 +101,7 @@ def get_latest_machine_report_pdf(machine_id: str, db: Session = Depends(get_db)
             status_code=404,
             detail="No Machine Report yet for this machine. Submit sensor data first.",
         )
-    return _serve_pdf(report)
+    return _serve_pdf(report, db)
 
 
 @router.get("/{report_id}/pdf")
@@ -99,4 +109,4 @@ def get_machine_report_pdf(report_id: str, db: Session = Depends(get_db)):
     report = db.query(MachineReport).filter(MachineReport.id == report_id).first()
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
-    return _serve_pdf(report)
+    return _serve_pdf(report, db)
