@@ -99,18 +99,14 @@ def _historical_df(db: Session, machine_id: str, limit: int = 5000) -> pd.DataFr
     )
 
 
-def _generate_machine_report_pdf(
-    db: Session, machine_id: str, run_id: str | None, prediction: Prediction, report_out: ReportOut
-) -> None:
-    """Machine Report PDF (rancangan.txt Section 7) — one row/file per run,
-    not per reading: the first reading of a run creates the report, every
-    later reading in that same still-open run overwrites the same file/row
-    in place. Called once at the end of _run_report_pipeline, every time a
-    new sensor reading comes in. Failure here must NOT fail the main
-    prediction/report pipeline — the caller wraps this call in try/except."""
-    machine = db.query(Machine).filter(Machine.id == machine_id).first()
-    machine_name = machine.name if machine else "CNC Machine"
-
+def _build_narrative_and_condition_log(
+    db: Session, machine_name: str, run_id: str | None, report_out: ReportOut
+) -> tuple[str, list[ConditionLogRow]]:
+    """Narrative text + Condition Log table (Section 6) for a Machine Report
+    PDF. Split out of _generate_machine_report_pdf so regenerate_machine_report_pdf()
+    (routes_machine_report.py's missing-file fallback) can rebuild the same
+    PDF content for an already-persisted report without duplicating this
+    logic."""
     predicted_label = report_out.prediction.predicted_label
     probability = report_out.prediction.failure_probability
     operating_status = "Failure" if predicted_label else ("Warning" if probability >= 0.15 else "Normal")
@@ -156,6 +152,26 @@ def _generate_machine_report_pdf(
         )
         for pred, reading in history_rows
     ]
+    return narrative, condition_log
+
+
+def _generate_machine_report_pdf(
+    db: Session, machine_id: str, run_id: str | None, prediction: Prediction, report_out: ReportOut
+) -> None:
+    """Machine Report PDF (rancangan.txt Section 7) — one row/file per run,
+    not per reading: the first reading of a run creates the report, every
+    later reading in that same still-open run overwrites the same file/row
+    in place. Called once at the end of _run_report_pipeline, every time a
+    new sensor reading comes in. Failure here must NOT fail the main
+    prediction/report pipeline — the caller wraps this call in try/except."""
+    machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    machine_name = machine.name if machine else "CNC Machine"
+
+    predicted_label = report_out.prediction.predicted_label
+    probability = report_out.prediction.failure_probability
+    operating_status = "Failure" if predicted_label else ("Warning" if probability >= 0.15 else "Normal")
+
+    narrative, condition_log = _build_narrative_and_condition_log(db, machine_name, run_id, report_out)
 
     # Upsert by run_id: reuse the existing report's number/file if this run
     # already has one (a later reading in the same still-open run), otherwise
@@ -202,6 +218,44 @@ def _generate_machine_report_pdf(
         )
         db.add(machine_report)
     db.commit()
+
+
+def regenerate_machine_report_pdf(db: Session, report: MachineReport) -> bool:
+    """Fallback for routes_machine_report.py's _serve_pdf when a MachineReport
+    row exists but its PDF file is missing from disk (REPORTS_DIR volume
+    cleared independently of the DB — see commit 67e8eee's fix, which covers
+    ordinary container recreation but not e.g. `docker compose down -v` or a
+    fresh volume). Rebuilds the PDF at the row's already-allocated file_path
+    from data that's already persisted (Prediction/SensorReading/FinalReport),
+    same as GET /report/latest — no LLM/SHAP/KNN/CRAG recomputation, so this
+    is safe to run inline in a GET request. Returns False (leaving the caller
+    to 404) if the source rows this report depends on are gone too."""
+    prediction = db.query(Prediction).filter(Prediction.id == report.prediction_id).first()
+    if prediction is None:
+        return False
+    sensor_reading = db.query(SensorReading).filter(SensorReading.id == prediction.sensor_reading_id).first()
+    final_report = db.query(FinalReport).filter(FinalReport.prediction_id == prediction.id).first()
+    if sensor_reading is None or final_report is None:
+        return False
+
+    machine = db.query(Machine).filter(Machine.id == report.machine_id).first()
+    machine_name = machine.name if machine else "CNC Machine"
+
+    report_out = _build_report_out(db, sensor_reading, prediction, final_report)
+    narrative, condition_log = _build_narrative_and_condition_log(
+        db, machine_name, report.run_id, report_out
+    )
+    output_path = report_folder.resolve(report.file_path)
+    render_machine_report_pdf(
+        machine_id=report.machine_id,
+        machine_name=machine_name,
+        report_number=report.report_number,
+        report_out=report_out,
+        narrative=narrative,
+        condition_log=condition_log,
+        output_path=output_path,
+    )
+    return True
 
 
 def _run_report_pipeline(
@@ -596,7 +650,17 @@ def get_latest_report(machine_id: str, db: Session = Depends(get_db)):
             ),
         )
     sensor_reading, prediction, final_report = row
+    return _build_report_out(db, sensor_reading, prediction, final_report)
 
+
+def _build_report_out(
+    db: Session, sensor_reading: SensorReading, prediction: Prediction, final_report: FinalReport
+) -> ReportOut:
+    """Reconstructs ReportOut purely from already-persisted DB rows — no
+    LLM/SHAP/KNN/CRAG recomputation. Shared by GET /report/latest and
+    regenerate_machine_report_pdf() (routes_machine_report.py's fallback when
+    a MachineReport's PDF file is missing from disk but its DB row and
+    source data are intact)."""
     feature_row = {
         "air_temperature_k": float(sensor_reading.air_temperature_k),
         "process_temperature_k": float(sensor_reading.process_temperature_k),
