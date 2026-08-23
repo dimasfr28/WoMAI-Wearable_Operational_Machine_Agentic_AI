@@ -4,7 +4,7 @@ any failure-mode taxonomy and not scoped to a machine_id (global library)."""
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SopStepIn(BaseModel):
@@ -32,6 +32,16 @@ class SopOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _stringify_id(cls, v: object) -> str:
+        """Sop.id is a native uuid.UUID from SQLAlchemy (UUID(as_uuid=True))
+        — Pydantic v2's plain `str` type doesn't auto-coerce that (unlike
+        v1), so list_sops/create_sop/update_sop (routes_sop.py, which return
+        the ORM object directly) raised ResponseValidationError as soon as a
+        row existed. Never caught earlier because the table started empty."""
+        return str(v)
 
 
 class SopCreateIn(BaseModel):
