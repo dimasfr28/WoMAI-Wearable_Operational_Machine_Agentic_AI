@@ -46,7 +46,8 @@ backups/
 # Docker
 *.pid
 
-# Internal planning docs / local tooling scratch — not part of the submission
-docs/
+# Internal planning docs / local tooling scratch — not part of the submission.
+docs/*
+!docs/diagrams/
 firecrawl/
 graphify-out/

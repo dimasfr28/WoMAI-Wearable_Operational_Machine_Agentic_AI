@@ -21,7 +21,7 @@ class FinalReportContext:
     part_price: list = field(default_factory=list)
 
 
-FINAL_REPORT_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+FINAL_REPORT_PROMPT = """You are a predictive maintenance assistant for Milling Machines.
 Write a concise report in English (markdown format) for an engineer, based on the data below.
 
 ## Prediction Result
@@ -96,7 +96,7 @@ class EarlyWarningContext:
     recommended_target: float | None
 
 
-EARLY_WARNING_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+EARLY_WARNING_PROMPT = """You are a predictive maintenance assistant for Milling Machines.
 Reply ONLY in JSON with exactly this schema (no other text):
 {{
   "ai_explanation": "<1-2 sentences in English explaining why this prediction occurred, naming the top contributing feature>",
@@ -154,7 +154,7 @@ def generate_early_warning_narrative(context: EarlyWarningContext) -> dict:
         }
 
 
-SUGGESTION_GENERAL_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+SUGGESTION_GENERAL_PROMPT = """You are a predictive maintenance assistant for Milling Machines.
 Turn the technical condition below into ONE concise, actionable suggestion sentence in English,
 WITHOUT stating raw numeric sensor values (e.g. do NOT write "313.5 K" or "230 minutes") — use a
 GENERAL term for the variable (e.g. "heat", "rotational speed", "tool wear/operating time"), and
@@ -208,7 +208,7 @@ class WhatIfContext:
     changed_features: dict[str, float]
 
 
-WHAT_IF_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+WHAT_IF_PROMPT = """You are a predictive maintenance assistant for Milling Machines.
 Compare the following hypothetical (what-if) scenario against the real current condition of
 machine {machine_name}. Reply in English, 2-4 sentences, stating the failure probability of both
 conditions and whether the risk increases, decreases, or stays the same. Do NOT invent any data

@@ -32,7 +32,7 @@ class CRAGState(TypedDict):
     part_names: list[str]
 
 
-RAG_ANSWER_PROMPT = """You are a technical predictive maintenance assistant for CNC machines.
+RAG_ANSWER_PROMPT = """You are a technical predictive maintenance assistant for Milling Machines.
 Using ONLY the sources below (service manuals / troubleshooting guides / historical sensor run
 data), answer the query in English with EXACTLY three sections, each as its own heading:
 
@@ -558,7 +558,7 @@ search queries.
 
 def generate_search_queries(
     shap_result: dict,
-    machine_name: str = "CNC machine",
+    machine_name: str = "Milling Machine",
     feature_row: dict | None = None,
     run_bounds: RunIqrBounds | None = None,
 ) -> tuple[str, list[str]]:

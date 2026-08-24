@@ -131,7 +131,7 @@ class BotAPITestCase(unittest.TestCase):
 
         self.test_machine = Machine(
             id=uuid.uuid4(),
-            name="CNC Milling Haas VF-2",
+            name="Milling Machine Haas VF-2",
             machine_type="Haas",
             status="running",
             created_by=self.test_user.id,
@@ -175,7 +175,7 @@ class BotAPITestCase(unittest.TestCase):
     @patch("app.bot.graph.chat_json")
     def test_post_bot_chitchat(self, mock_chat_json, mock_chat):
         mock_chat_json.return_value = json.dumps({"intent": "chitchat"})
-        mock_chat.return_value = "Halo! Ada yang bisa saya bantu terkait mesin CNC Haas?"
+        mock_chat.return_value = "Halo! Ada yang bisa saya bantu terkait mesin Milling Machine?"
 
         resp = self.client.post("/bot", json={"message": "Halo apa kabar?", "session_id": "session-123"})
         self.assertEqual(resp.status_code, 200)

@@ -61,7 +61,7 @@ def chitchat_node(state: BotGraphState) -> BotGraphState:
         reply = chat(messages)
     except Exception:
         logger.exception("chitchat_node: chat failed")
-        reply = "Halo! Saya adalah Predixia Bot, asisten pemantauan dan predictive maintenance mesin CNC. Ada yang bisa saya bantu terkait mesin atau data sensor Anda?"
+        reply = "Halo! Saya adalah Wo.M.AI Bot, asisten pemantauan dan predictive maintenance mesin CNC and milling. Ada yang bisa saya bantu terkait mesin atau data sensor Anda?"
 
     return {**state, "final_response": reply}
 

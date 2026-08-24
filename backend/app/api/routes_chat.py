@@ -41,7 +41,7 @@ from app.schemas.sensor import SensorReadingIn
 
 router = APIRouter(tags=["chat"])
 
-SYSTEM_PROMPT_INTENT = """Kamu adalah pengklasifikasi intent untuk asisten pemeliharaan prediktif mesin CNC Haas.
+SYSTEM_PROMPT_INTENT = """Kamu adalah pengklasifikasi intent untuk asisten pemeliharaan prediktif mesin Milling Machine.
 Baca pesan user dan balas HANYA JSON dengan skema persis ini (tanpa teks lain):
 {{
   "intent": "predict" | "latest_report" | "sop_lookup" | "what_if" | "chitchat",
@@ -431,7 +431,7 @@ def _run_chitchat(message: str):
         [
             {
                 "role": "system",
-                "content": "Kamu adalah asisten pemeliharaan prediktif mesin CNC Haas. Jawab singkat, ramah, dalam Bahasa Indonesia.",
+                "content": "Kamu adalah asisten pemeliharaan prediktif mesin Milling Machine. Jawab singkat, ramah, dalam Bahasa Indonesia.",
             },
             {"role": "user", "content": message},
         ]
