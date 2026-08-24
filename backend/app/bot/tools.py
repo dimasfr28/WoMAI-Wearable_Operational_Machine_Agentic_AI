@@ -105,7 +105,7 @@ BOT_TOOL_DEFINITIONS = [
     },
     {
         "name": "list_machines",
-        "description": "Daftar semua mesin CNC yang terdaftar beserta status operasional dan informasinya.",
+        "description": "Daftar semua mesin CNC dan milling yang terdaftar beserta status operasional dan informasinya.",
         "parameters": {
             "type": "object",
             "properties": {},

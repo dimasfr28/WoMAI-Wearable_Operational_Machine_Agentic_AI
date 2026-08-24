@@ -1,12 +1,13 @@
 # Predictive Maintenance Copilot
 
-Aplikasi predictive maintenance untuk mesin CNC (Haas) yang menggabungkan **prediksi kegagalan mesin berbasis Machine Learning** (dua model: klasifikasi gagal/tidak + prediksi risiko dalam 10 menit ke depan), **penjelasan model (SHAP)**, **rekomendasi berbasis kemiripan kasus (KNN)**, dan **analisis akar masalah otomatis (Corrective RAG + LLM)** — lengkap dengan estimasi harga spare part dari marketplace dan laporan PDF otomatis. Sistem membaca data sensor mesin, memprediksi risiko kegagalan (sekarang + 10 menit ke depan), menjelaskan *mengapa* lewat kartu **Early Warning**, menyarankan penyesuaian parameter, mencari SOP penanganan dari manual servis (atau pencarian web sebagai fallback), menghasilkan **laporan PDF** otomatis setiap ada data sensor baru, dan menyediakan **chatbot** untuk bertanya soal prediksi/laporan/SOP maupun menjalankan simulasi **"bagaimana jika"** (what-if) terhadap kondisi mesin.
+Aplikasi predictive maintenance untuk mesin Milling yang menggabungkan **prediksi kegagalan mesin berbasis Machine Learning** (dua model: klasifikasi gagal/tidak + prediksi risiko dalam 10 menit ke depan), **penjelasan model (SHAP)**, **rekomendasi berbasis kemiripan kasus (KNN)**, dan **analisis akar masalah otomatis (Corrective RAG + LLM)** — lengkap dengan estimasi harga spare part dari marketplace dan laporan PDF otomatis. Sistem membaca data sensor mesin, memprediksi risiko kegagalan (sekarang + 10 menit ke depan), menjelaskan *mengapa* lewat kartu **Early Warning**, menyarankan penyesuaian parameter, mencari SOP penanganan dari manual servis (atau pencarian web sebagai fallback), menghasilkan **laporan PDF** otomatis setiap ada data sensor baru, dan menyediakan **chatbot** untuk bertanya soal prediksi/laporan/SOP maupun menjalankan simulasi **"bagaimana jika"** (what-if) terhadap kondisi mesin.
 
 Seluruh keluaran LLM (jawaban RAG, laporan PDF, diagnosis) berbahasa **Inggris**, wajib menyertakan **sitasi sumber** (nama dokumen tanpa ekstensi file), dan dilarang memakai kalimat ambigu ("maybe", "perhaps", dsb.) — pernyataan harus tegas dan berdasarkan bukti.
 
 ## Daftar Isi
 
 - [Arsitektur & Tech Stack](#arsitektur--tech-stack)
+- [Diagram](#diagram)
 - [Struktur Proyek](#struktur-proyek)
 - [Alur Kerja Utama](#alur-kerja-utama-pipeline-report)
 - [Fitur & Halaman Frontend](#fitur--halaman-frontend)
@@ -37,56 +38,74 @@ Seluruh keluaran LLM (jawaban RAG, laporan PDF, diagnosis) berbahasa **Inggris**
 
 > **Catatan migrasi MinerU & embedding ke service terpisah:** sebelumnya, model MinerU (parsing PDF) dan sentence-transformers (embedding) di-load langsung di proses backend — setiap perubahan kecil di kode backend (`requirements.txt` atau file Python apa pun) membuat Docker meng-invalidate ulang layer cache yang berisi download model berukuran ratusan MB, membuat rebuild jadi sangat lambat. Kedua model itu sekarang berjalan sebagai container Docker sendiri (`mineru-service`, `embedding-service`) dengan volume cache sendiri, dipanggil backend murni lewat HTTP — perubahan kode backend tidak lagi memicu re-download model.
 
+## Diagram
+
+**Arsitektur Sistem** — komponen frontend/backend di dalam Docker, data store (Supabase, ChromaDB, filesystem), microservices (`mineru-service`, `embedding-service`), layanan eksternal (Gemini, Telegram, SearXNG, Alibaba), dan sumber data hardware (IoT):
+
+![System Architecture Diagram](docs/diagrams/System_Diagram.png)
+
+**Data Flow Diagram — Level 0 (Context Diagram)** — WoMAI sebagai satu proses tunggal, seluruh entitas eksternal yang berinteraksi dengannya:
+
+![DFD Level 0](docs/diagrams/DFD_Level_0.png)
+
+**Data Flow Diagram — Level 1** — dekomposisi WoMAI jadi 6 sub-proses (autentikasi, kelola mesin/SOP, kelola knowledge base, prediksi kegagalan, analisis akar masalah/CRAG, susun laporan & layani chat) beserta data store-nya:
+
+![DFD Level 1](docs/diagrams/DFD_Level_1.png)
+
+**Entity Relationship Diagram** — skema lengkap seluruh tabel Postgres dan relasinya:
+
+![ERD](docs/diagrams/ERD_Compfest.png)
+
 ## Struktur Proyek
 
 ```
 comfest/app/
-├── backend/                       # FastAPI app
+├── backend/                           # FastAPI app
 │   ├── app/
-│   │   ├── api/                     # Route handlers: auth, machine, sensor, knowledgebase,
-│   │   │                            #   report, machine_report, sop, chat
-│   │   ├── db/                       # SQLAlchemy models, session, migrasi Alembic
-│   │   ├── ingestion/                # Parsing PDF (via mineru_client), chunking, deduplikasi,
-│   │   │                            #   embedding (via HTTP ke embedding-service)
+│   │   ├── api/                       # Route handlers: auth, machine, sensor, knowledgebase,
+│   │   │                              #   report, machine_report, sop, chat
+│   │   ├── db/                        # SQLAlchemy models, session, migrasi Alembic
+│   │   ├── ingestion/                 # Parsing PDF (via mineru_client), chunking, deduplikasi,
+│   │   │                              #   embedding (via HTTP ke embedding-service)
 │   │   ├── llm/                       # Klien Groq (chat/chat_json)
 │   │   ├── ml/                        # Prediktor klasifikasi + horizon, SHAP, KNN, outlier IQR
 │   │   ├── rag/                       # Corrective RAG graph, retriever, grader, final_report
-│   │   │                            #   (LLM), part_price_search (Playwright → Alibaba)
-│   │   ├── reports/                    # Generator laporan PDF: template Jinja2, narasi LLM,
-│   │   │                            #   penataan folder laporan per hari
-│   │   ├── schemas/                    # Pydantic request/response models
-│   │   ├── vectorstore/                # Klien ChromaDB
-│   │   ├── config.py                   # Konfigurasi (env vars)
-│   │   └── main.py                     # Entry point FastAPI
-│   ├── saved/                          # Model ML terlatih: clasification/, horizon/ (masing-
+│   │   │                              #   (LLM), part_price_search (Playwright → Alibaba)
+│   │   ├── reports/                   # Generator laporan PDF: template Jinja2, narasi LLM,
+│   │   │                              #   penataan folder laporan per hari
+│   │   ├── schemas/                   # Pydantic request/response models
+│   │   ├── vectorstore/               # Klien ChromaDB
+│   │   ├── config.py                  # Konfigurasi (env vars)
+│   │   └── main.py                    # Entry point FastAPI
+│   ├── saved/                         # Model ML terlatih: clasification/, horizon/ (masing-
 │   │                                  #   masing .pkl + catatan cara pakai)
-│   ├── vendor/                          # Klien HTTP MinerU kustom (mineru_client.py) — TIDAK
+│   ├── vendor/                        # Klien HTTP MinerU kustom (mineru_client.py) — TIDAK
 │   │                                  #   mengimpor package `mineru` langsung, hanya replikasi
 │   │                                  #   protokol submit/poll/download-nya lewat httpx
 │   └── Dockerfile.dev / Dockerfile.prod
-├── mineru-service/                # Container terpisah: menjalankan MinerU asli (mineru-api)
-├── embedding-service/              # Container terpisah: FastAPI wrapper sentence-transformers
-├── frontend/                      # Next.js App Router
+├── mineru-service/                    # Container terpisah: menjalankan MinerU asli (mineru-api)
+├── embedding-service/                 # Container terpisah: FastAPI wrapper sentence-transformers
+├── frontend/                          # Next.js App Router
 │   └── src/
 │       ├── app/
 │       │   ├── (app)/                 # Halaman berautentikasi: mesin, chat, chat/[id], sop,
-│       │   │                         #   riwayat, machine-diagnosis, machine-report
-│       │   ├── actions/                # Server Actions — satu-satunya jalur ke backend FastAPI
-│       │   ├── api/chat/route.ts       # Proxy SSE dari POST /chat backend
+│       │   │                          #   riwayat, machine-diagnosis, machine-report
+│       │   ├── actions/               # Server Actions — satu-satunya jalur ke backend FastAPI
+│       │   ├── api/chat/route.ts      # Proxy SSE dari POST /chat backend
 │       │   ├── api/machine-report/[id]/pdf/route.ts   # Proxy stream PDF laporan (inline, bukan
 │       │   │                                          #   download paksa)
-│       │   ├── login/, register/       # Auth pages
-│       │   └── page.tsx                # Landing page (marketing)
-│       ├── components/                  # UI (shadcn/ui) + komponen chat + app-shell/sidebar +
+│       │   ├── login/, register/      # Auth pages
+│       │   └── page.tsx               # Landing page (marketing)
+│       ├── components/                # UI (shadcn/ui) + komponen chat + app-shell/sidebar +
 │       │                              #   require-active-machine (gerbang pemilihan mesin)
-│       ├── hooks/, lib/                  # Hooks, tipe, util, sesi auth (cookie), state mesin
-│       │                              #   aktif (localStorage)
-│       └── middleware.ts                 # Cek keberadaan cookie sesi + redirect paksa ke /mesin
-├── searxng/                        # Konfigurasi SearXNG
-├── compose.yaml                   # Service dasar: postgres, chromadb, searxng
-├── dev.compose.yaml                # Override dev: 7 service, hot-reload, port host
-├── prod.compose.yaml               # Override prod: build image, Traefik/Dokploy routing
-└── up.sh                           # Wrapper `docker compose up` dengan health-check banner
+│       ├── hooks/, lib/               # Hooks, tipe, util, sesi auth (cookie), state mesin
+│       │                              #    aktif (localStorage)
+│       └── middleware.ts              # Cek keberadaan cookie sesi + redirect paksa ke /mesin
+├── searxng/                           # Konfigurasi SearXNG
+├── compose.yaml                       # Service dasar: postgres, chromadb, searxng
+├── dev.compose.yaml                   # Override dev: 7 service, hot-reload, port host
+├── prod.compose.yaml                  # Override prod: build image, Traefik/Dokploy routing
+└── up.sh                              # Wrapper `docker compose up` dengan health-check banner
 ```
 
 ## Alur Kerja Utama (Pipeline Report)
@@ -378,14 +397,6 @@ Sistem memakai **dua model terpisah** yang menjawab pertanyaan berbeda:
 - Frontend Next.js (App Router): landing page, Login/Register, Mesin (CRUD + pemilihan mesin aktif), Chat (+ riwayat sesi), Knowledge Base, Machine Diagnosis, Machine Report (viewer PDF inline)
 - MinerU & model embedding berjalan sebagai service Docker terpisah dari backend, supaya perubahan kode backend tidak memicu ulang download model berukuran besar
 - Orkestrasi penuh via Docker Compose (7 service: postgres, chromadb, searxng, backend, frontend, mineru-service, embedding-service), dengan override terpisah untuk dev dan prod (Dokploy/Traefik)
-
-### 🚧 Belum dikerjakan / diketahui sebagai gap
-
-- Penegakan autentikasi yang belum konsisten di seluruh endpoint GET — sebagian besar endpoint baca (dokumen, chunk, sensor history/runs, report, machine-report, SOP) masih bersifat publik meski frontend selalu mengirim token; hanya endpoint di bawah `/machines` yang sudah diproteksi penuh termasuk `GET`-nya.
-- Status operasional mesin (`machines.status`) masih nilai statis (`"running"` untuk semua mesin) — belum ada feed real-time untuk mengisinya secara dinamis. Rencana ke depan: input sensor sungguhan akan datang dari perangkat **ESP32** yang memanggil `POST /sensor/readings` langsung — endpoint ini sudah cukup, tidak perlu arsitektur baru.
-- `POST /sensor/readings/batch` sudah tersedia tapi belum ada pemanggil nyata (disiapkan untuk integrasi input otomatis terjadwal di masa depan).
-- `agent_tool_logs` — skema tabel sudah ada lewat migrasi awal, belum aktif ditulisi oleh kode chatbot saat ini (dicadangkan untuk logging tool-call agent yang lebih rinci).
-- Section **Estimated Financial Impact** di laporan PDF sengaja tidak diimplementasikan — tidak ada sumber data biaya per jam/tingkat produksi di sistem ini; ini keputusan desain sadar, bukan kekurangan yang perlu ditambal dengan angka karangan.
 
 ---
 

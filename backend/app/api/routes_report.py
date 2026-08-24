@@ -109,7 +109,7 @@ def _generate_machine_report_pdf(
     new sensor reading comes in. Failure here must NOT fail the main
     prediction/report pipeline — the caller wraps this call in try/except."""
     machine = db.query(Machine).filter(Machine.id == machine_id).first()
-    machine_name = machine.name if machine else "CNC Machine"
+    machine_name = machine.name if machine else "Milling Machine"
 
     predicted_label = report_out.prediction.predicted_label
     probability = report_out.prediction.failure_probability
@@ -353,7 +353,7 @@ def _run_report_pipeline(
 
     if pred_result.label:
         machine_row = db.query(Machine).filter(Machine.id == machine_id).first()
-        machine_name = machine_row.name if machine_row else "CNC machine"
+        machine_name = machine_row.name if machine_row else "Milling Machine"
 
         # IQR per RUN ID (rancangan.txt) — menentukan fitur SHAP mana yang
         # genuinely anomali (bukan cuma paling berkontribusi) untuk query RAG.

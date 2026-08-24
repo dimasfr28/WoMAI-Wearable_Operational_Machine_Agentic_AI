@@ -19,7 +19,7 @@ from app.llm.gemini_client import chat_json
 
 logger = logging.getLogger(__name__)
 
-MACHINE_REPORT_NARRATIVE_PROMPT = """You are a predictive maintenance assistant for CNC machines.
+MACHINE_REPORT_NARRATIVE_PROMPT = """You are a predictive maintenance assistant for Milling Machines.
 Reply ONLY in JSON with exactly this schema (no other text):
 {{
   "condition_summary": "<2-4 sentences in English on the machine's condition, based on the ML results and sensor data>",

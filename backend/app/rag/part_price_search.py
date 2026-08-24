@@ -200,7 +200,7 @@ def playwright_scrape_alibaba(keyword: str, limit: int = 4, timeout_ms: int = 30
     return raw_results[:limit]
 
 
-# Harga dianggap masuk akal untuk part CNC industrial kalau dalam rentang ini
+# Harga dianggap masuk akal untuk part industrial kalau dalam rentang ini
 # — menyaring kartu produk yang harganya "Login untuk lihat harga" atau
 # semacamnya yang lolos parsing tapi jelas bukan angka harga asli.
 _MIN_PLAUSIBLE_PRICE_IDR = 10_000
@@ -242,7 +242,7 @@ def _parse_alibaba_price(raw: str | None) -> tuple[float, float] | None:
     return (lo, hi)
 
 
-def search_part_price(part_name: str, machine_type: str = "Haas CNC", max_candidates: int = 4) -> list[dict]:
+def search_part_price(part_name: str, machine_type: str = "Milling Machine", max_candidates: int = 4) -> list[dict]:
     """Section 6.10: cari harga part via Playwright scrape langsung ke halaman
     search Alibaba (lihat playwright_scrape_alibaba) — TIDAK lagi lewat
     SearXNG->scrape-URL-kandidat seperti versi Firecrawl sebelumnya, karena
@@ -277,14 +277,14 @@ def search_part_price(part_name: str, machine_type: str = "Haas CNC", max_candid
 
 _RELEVANCE_STOPWORDS = {
     "cnc", "machine", "haas", "for", "the", "a", "an", "and", "or", "of", "with", "system",
-    "part", "parts", "kit", "tool", "industrial", "machinery",
+    "part", "parts", "kit", "tool", "industrial", "machinery", "milling"
 }
 
 
 def _relevance_keywords(text: str) -> set[str]:
     """Meaningful (non-stopword, length > 2) lowercase words from a query or
     product title — used by _is_relevant_product to reject listings that
-    share nothing but generic CNC/machine boilerplate with the search term
+    share nothing but generic machine boilerplate with the search term
     (e.g. searching "grease filter" must not accept a "Range Hood Grease
     Filter" or "DJI Lens Filter" listing just because both say "filter")."""
     words = re.findall(r"[a-zA-Z0-9]+", text.lower())
