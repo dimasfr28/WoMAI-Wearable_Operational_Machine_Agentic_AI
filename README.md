@@ -65,6 +65,15 @@ Seluruh keluaran LLM (jawaban RAG, laporan PDF, diagnosis) berbahasa **Inggris**
 
 ![ERD](docs/diagrams/ERD_Compfest.png)
 
+**Diagram Elektrikal**: skema pengkabelan dan interkoneksi hardware komponen IoT berbasis mikrokontroler **ESP32 DevKit** untuk pemantauan fisik mesin secara real-time. Skema ini mengintegrasikan komponen:
+- **Sensor Suhu & Kelembaban (DHT22)**: terhubung ke pin GPIO digital ESP32 DevKit untuk mengukur suhu udara ambien (*air temperature*) dan kelembaban lingkungan di sekitar mesin.
+- **Sensor Suhu Non-Kontak IR (GY-906)**: terhubung melalui komunikasi bus I2C (pin SCL & SDA) untuk pembacaan suhu permukaan/proses mesin (*process temperature*) secara non-kontak.
+- **Sensor Optik (Photoelectric IR)**: terhubung ke pin GPIO digital untuk mendeteksi keberadaan objek/limit posisi mekanis, serta membantu pembacaan keausan pahat (*tool wear*) dan kecepatan rotasi (*rotational speed*).
+- **Modul Step-Down Buck Converter (XL4005)**: bertindak sebagai pemproses tegangan yang menurunkan dan menyetabilkan tegangan keluaran dari baterai ke tingkat yang aman bagi ESP32 DevKit dan modul sensor.
+- **Baterai LiPo & Switch Button**: ditenagai oleh baterai LiPo (ONBO 2200 mAh) sebagai catu daya portabel, yang dikontrol akses daya masuknya melalui saklar utama (*Switch Button*).
+
+![Diagram Elektrikal](docs/diagrams/Electrical_DIagram.png)
+
 ## Struktur Proyek
 
 <details>
